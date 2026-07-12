@@ -40,3 +40,4 @@ backend/manuscript.db-wal
 # OS
 .DS_Store
 Thumbs.db
+scratch/
