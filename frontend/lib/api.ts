@@ -100,6 +100,11 @@ export const manuscriptsApi = {
 
   getRevisionSummary: (id: string, token: string) =>
     request<RevisionSummary>(`/manuscripts/${id}/revision-summary`, {}, token),
+
+  downloadFile: (id: string, token: string) =>
+    fetch(`${API_BASE}/manuscripts/${id}/download`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
 };
 
 export const reportsApi = {

@@ -2,6 +2,8 @@
 Manuscripts API — upload (with version support), list, get, process, versions, revision summary.
 """
 import json
+import mimetypes
+import os
 from typing import Annotated, Optional
 
 from fastapi import (
@@ -14,6 +16,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_user
@@ -263,7 +266,34 @@ async def get_parsed_document(
     }
 
 
-@router.delete("/{manuscript_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.get("/{manuscript_id}/download")
+async def download_manuscript_file(
+    manuscript_id: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> FileResponse:
+    """Download the original uploaded file for a manuscript."""
+    repo = ManuscriptRepository(db)
+    manuscript = await repo.get_by_id_and_owner(manuscript_id, current_user.id)
+    if not manuscript:
+        raise HTTPException(status_code=404, detail="Manuscript not found.")
+
+    file_path = manuscript.file_path
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Original file no longer available on disk.")
+
+    # Use the original filename for the download; fallback to stored path
+    filename = manuscript.original_filename or os.path.basename(file_path)
+    media_type, _ = mimetypes.guess_type(filename)
+    media_type = media_type or "application/octet-stream"
+
+    return FileResponse(
+        path=file_path,
+        filename=filename,
+        media_type=media_type,
+    )
+
+
 async def delete_manuscript(
     manuscript_id: str,
     current_user: Annotated[User, Depends(get_current_user)],

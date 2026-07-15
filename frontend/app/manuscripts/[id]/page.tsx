@@ -1,6 +1,26 @@
 "use client";
 
 import React, { useEffect, useState, use } from "react";
+
+// Expandable 2-line summary — click "Read more" to see the full text
+function ExpandableSummary({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!text) return null;
+  return (
+    <div>
+      <p className={`text-[10px] text-slate-400 leading-normal ${expanded ? "" : "line-clamp-2"}`}>
+        {text}
+      </p>
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="text-[10px] text-indigo-400 hover:text-indigo-300 mt-0.5 transition-colors"
+      >
+        {expanded ? "Show less" : "Read more"}
+      </button>
+    </div>
+  );
+}
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "../../../components/layout/DashboardLayout";
@@ -148,6 +168,29 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
     }
   };
 
+  const handleDownloadOriginal = async () => {
+    if (!token || !manuscript) return;
+    try {
+      toast("Starting download...", "info");
+      const response = await manuscriptsApi.downloadFile(manuscript.id, token);
+      if (!response.ok) {
+        throw new Error("Failed to download file");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = manuscript.original_filename || "manuscript";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast("Download started successfully", "success");
+    } catch {
+      toast("Failed to download file.", "error");
+    }
+  };
+
   const handleDownloadJson = async () => {
     if (!token || !report) return;
     try {
@@ -272,6 +315,12 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
                 <span className={`text-xs px-3 py-1.5 rounded-full font-semibold uppercase tracking-wider ${getStatusColor(manuscript.status)}`}>
                   {manuscript.status}
                 </span>
+                <button
+                  onClick={handleDownloadOriginal}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 rounded-xl transition-all"
+                >
+                  <Download className="w-4 h-4" />Original File
+                </button>
                 {manuscript.status === "completed" && report && (
                   <button
                     onClick={handleDownloadJson}
@@ -334,14 +383,14 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
                   <div className="bg-slate-900/30 border border-slate-800/80 p-6 rounded-2xl flex flex-col justify-center items-center text-center space-y-4">
                     <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Overall Score</span>
                     <div className="flex items-baseline gap-1">
-                      <span className={`text-5xl font-black ${getScoreColor(parsedReport.overall_score)}`}>
-                        {parsedReport.overall_score}
+                      <span className={`text-5xl font-black ${getScoreColor(parsedReport.overall_score / 10)}`}>
+                        {(parsedReport.overall_score / 10).toFixed(1)}
                       </span>
-                      <span className="text-slate-600 font-medium text-lg">/100</span>
+                      <span className="text-slate-600 font-medium text-lg">/10</span>
                     </div>
                     <div className="space-y-1">
-                      <p className="font-bold text-sm text-slate-200">{getScoreLabel(parsedReport.overall_score)}</p>
-                      <p className="text-xs text-slate-500">Severity-weighted score</p>
+                      <p className="font-bold text-sm text-slate-200">{getScoreLabel(parsedReport.overall_score / 10)}</p>
+                      <p className="text-xs text-slate-500">Lower score = more severe issues</p>
                     </div>
                   </div>
 
@@ -379,10 +428,10 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
                     <div key={agent.name} className="bg-slate-900/30 border border-slate-800/80 p-5 rounded-2xl space-y-2">
                       <span className="text-xs font-medium text-slate-500">{agent.name}</span>
                       <div className="flex items-baseline gap-1">
-                        <span className={`text-xl font-bold ${getScoreColor(agent.data.score * 10)}`}>{agent.data.score}</span>
+                        <span className={`text-xl font-bold ${getScoreColor(agent.data.score)}`}>{agent.data.score}</span>
                         <span className="text-slate-600 text-xs">/10</span>
                       </div>
-                      <p className="text-[10px] text-slate-450 line-clamp-2 leading-normal">{agent.data.summary}</p>
+                      <ExpandableSummary text={agent.data.summary} />
                     </div>
                   ))}
                 </div>

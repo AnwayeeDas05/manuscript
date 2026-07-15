@@ -34,23 +34,23 @@ export function formatRelativeTime(dateStr: string): string {
   return formatDate(dateStr);
 }
 
-/** Works on 0–100 scale. */
+/** Works on 0–10 scale. Lower score = more severe issues = red. */
 export function getScoreColor(score: number): string {
-  if (score >= 80) return "text-emerald-400";
-  if (score >= 60) return "text-yellow-400";
-  if (score >= 40) return "text-orange-400";
+  if (score >= 8) return "text-emerald-400";
+  if (score >= 6) return "text-yellow-400";
+  if (score >= 4) return "text-orange-400";
   return "text-red-400";
 }
 
-/** Works on 0–100 scale. */
+/** Works on 0–10 scale. Lower score = more severe issues. */
 export function getScoreLabel(score: number): string {
-  if (score >= 90) return "Excellent";
-  if (score >= 80) return "Very Good";
-  if (score >= 70) return "Good";
-  if (score >= 60) return "Above Average";
-  if (score >= 50) return "Average";
-  if (score >= 40) return "Below Average";
-  if (score >= 25) return "Poor";
+  if (score >= 9) return "Excellent";
+  if (score >= 8) return "Very Good";
+  if (score >= 7) return "Good";
+  if (score >= 6) return "Above Average";
+  if (score >= 5) return "Average";
+  if (score >= 4) return "Below Average";
+  if (score >= 2.5) return "Poor";
   return "Needs Major Revision";
 }
 
