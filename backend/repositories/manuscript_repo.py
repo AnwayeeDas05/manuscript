@@ -106,3 +106,68 @@ class ManuscriptRepository:
     async def delete(self, manuscript: Manuscript) -> None:
         await self.db.delete(manuscript)
         await self.db.flush()
+
+    async def find_by_title_and_owner(
+        self, title: str, owner_id: str
+    ) -> Optional[Manuscript]:
+        """Find the original (parent) manuscript with a matching title for the user."""
+        result = await self.db.execute(
+            select(Manuscript).where(
+                Manuscript.title == title,
+                Manuscript.owner_id == owner_id,
+                Manuscript.parent_id.is_(None),  # only original manuscripts
+            ).order_by(Manuscript.created_at.asc()).limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_versions(self, parent_id: str, owner_id: str) -> list[Manuscript]:
+        """List the original manuscript + all its versions in version order."""
+        result = await self.db.execute(
+            select(Manuscript).where(
+                ((Manuscript.id == parent_id) | (Manuscript.parent_id == parent_id)),
+                Manuscript.owner_id == owner_id,
+            ).order_by(Manuscript.version_number.asc())
+        )
+        return list(result.scalars().all())
+
+    async def get_latest_version_number(self, parent_id: str, owner_id: str) -> int:
+        """Return the highest version_number in the version family."""
+        result = await self.db.execute(
+            select(Manuscript).where(
+                ((Manuscript.id == parent_id) | (Manuscript.parent_id == parent_id)),
+                Manuscript.owner_id == owner_id,
+            ).order_by(Manuscript.version_number.desc()).limit(1)
+        )
+        latest = result.scalar_one_or_none()
+        return latest.version_number if latest else 1
+
+    async def create_version(
+        self,
+        owner_id: str,
+        title: str,
+        original_filename: str,
+        file_path: str,
+        file_size_bytes: int,
+        file_type: str,
+        parent_id: str,
+        version_number: int,
+        author: Optional[str] = None,
+    ) -> Manuscript:
+        """Create a new version of an existing manuscript."""
+        manuscript = Manuscript(
+            owner_id=owner_id,
+            title=title,
+            original_filename=original_filename,
+            file_path=file_path,
+            file_size_bytes=file_size_bytes,
+            file_type=file_type,
+            author=author,
+            status="uploaded",
+            parent_id=parent_id,
+            version_number=version_number,
+        )
+        self.db.add(manuscript)
+        await self.db.flush()
+        await self.db.refresh(manuscript)
+        return manuscript
+

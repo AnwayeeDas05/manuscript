@@ -7,6 +7,7 @@ from models.parsed_document import ParsedDocument
 from models.entity import Entity
 from models.review import Review
 from models.editorial_report import EditorialReport
+from models.revision_history import RevisionHistory
 
 __all__ = [
     "User",
@@ -15,4 +16,5 @@ __all__ = [
     "Entity",
     "Review",
     "EditorialReport",
+    "RevisionHistory",
 ]

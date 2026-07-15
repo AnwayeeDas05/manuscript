@@ -1,5 +1,6 @@
 """
 Chief Editor Agent node — merges all reviewer outputs into the final report.
+Programmatic score calculation based on finding severity weights.
 """
 import json
 from datetime import datetime, timezone
@@ -10,6 +11,24 @@ from prompts.chief_editor_prompt import CHIEF_EDITOR_PROMPT
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Severity → score deduction map (max score = 100)
+SEVERITY_DEDUCTIONS = {
+    "critical": 25,
+    "major": 15,
+    "moderate": 8,
+    "minor": 3,
+    "suggestion": 1,
+}
+
+
+def compute_score_from_findings(findings: list) -> float:
+    """Compute a 0-100 score by deducting points per severity level."""
+    score = 100.0
+    for f in findings:
+        sev = f.get("severity", "minor").lower()
+        score -= SEVERITY_DEDUCTIONS.get(sev, 3)
+    return round(max(0.0, min(100.0, score)), 1)
 
 
 def _safe_review_json(review) -> str:
@@ -41,17 +60,32 @@ def chief_editor_node(state: EditorialState) -> EditorialState:
         result.setdefault("manuscript_id", state["manuscript_id"])
         result.setdefault("title", state["title"])
         result.setdefault("generated_at", generated_at)
+        result.setdefault("critical_findings", [])
         result.setdefault("major_findings", [])
+        result.setdefault("moderate_findings", [])
         result.setdefault("minor_findings", [])
+        result.setdefault("suggestions", [])
         result.setdefault("recommendations", [])
         result.setdefault("overall_assessment", "")
-        result.setdefault("overall_score", 5.0)
+
+        # Programmatic score calculation — overrides LLM-supplied score
+        all_findings = (
+            result.get("critical_findings", [])
+            + result.get("major_findings", [])
+            + result.get("moderate_findings", [])
+            + result.get("minor_findings", [])
+            + result.get("suggestions", [])
+        )
+        result["overall_score"] = compute_score_from_findings(all_findings)
 
         logger.info(
             "chief_editor_done",
             score=result.get("overall_score"),
+            critical=len(result.get("critical_findings", [])),
             major=len(result.get("major_findings", [])),
+            moderate=len(result.get("moderate_findings", [])),
             minor=len(result.get("minor_findings", [])),
+            suggestions=len(result.get("suggestions", [])),
         )
         return {**state, "final_report": result}
 
@@ -75,22 +109,23 @@ def _build_fallback_report(state: EditorialState, generated_at: str, error: str)
     time_r = state.get("timeline_review")
     dial_r = state.get("dialogue_review")
 
-    scores = [
-        _safe(char_r, "score", 5.0),
-        _safe(plot_r, "score", 5.0),
-        _safe(time_r, "score", 5.0),
-        _safe(dial_r, "score", 5.0),
-    ]
-    overall = round(sum(scores) / len(scores), 2)
-
     all_findings = (
         _safe(char_r, "findings", [])
         + _safe(plot_r, "findings", [])
         + _safe(time_r, "findings", [])
         + _safe(dial_r, "findings", [])
     )
-    major = [f for f in all_findings if f.get("severity") == "major"]
-    minor = [f for f in all_findings if f.get("severity") in ("minor", "suggestion")]
+
+    def _by_severity(sev):
+        return [f for f in all_findings if f.get("severity") == sev]
+
+    critical = _by_severity("critical")
+    major = _by_severity("major")
+    moderate = _by_severity("moderate")
+    minor = _by_severity("minor")
+    suggestions = _by_severity("suggestion")
+
+    overall = compute_score_from_findings(all_findings)
 
     return {
         "manuscript_id": state["manuscript_id"],
@@ -117,8 +152,11 @@ def _build_fallback_report(state: EditorialState, generated_at: str, error: str)
             "summary": _safe(dial_r, "summary", ""),
             "findings": _safe(dial_r, "findings", []),
         },
+        "critical_findings": critical,
         "major_findings": major,
+        "moderate_findings": moderate,
         "minor_findings": minor,
+        "suggestions": suggestions,
         "recommendations": ["Please re-run the analysis for a complete report."],
         "overall_assessment": "Review partially completed. Some agents may have encountered errors.",
         "generated_at": generated_at,

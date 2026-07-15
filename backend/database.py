@@ -69,5 +69,21 @@ async def get_db_context() -> AsyncGenerator[AsyncSession, None]:
 
 async def create_tables() -> None:
     """Create all tables that don't exist yet (dev convenience)."""
+    from sqlalchemy import text
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        
+        # Add new columns to existing tables for SQLite development databases
+        alters = [
+            "ALTER TABLE manuscripts ADD COLUMN parent_id VARCHAR(36) REFERENCES manuscripts(id) ON DELETE CASCADE;",
+            "ALTER TABLE manuscripts ADD COLUMN version_number INTEGER DEFAULT 1 NOT NULL;",
+            "ALTER TABLE editorial_reports ADD COLUMN critical_findings_count VARCHAR(10) DEFAULT '0';",
+            "ALTER TABLE editorial_reports ADD COLUMN moderate_findings_count VARCHAR(10) DEFAULT '0';",
+            "ALTER TABLE editorial_reports ADD COLUMN suggestions_count VARCHAR(10) DEFAULT '0';",
+        ]
+        for alter in alters:
+            try:
+                await conn.execute(text(alter))
+            except Exception:
+                # Column might already exist
+                pass

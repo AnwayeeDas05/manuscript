@@ -27,8 +27,32 @@ async def lifespan(app: FastAPI):
     if settings.is_sqlite:
         await create_tables()
         logger.info("sqlite_tables_created")
+
+    # Reset any manuscripts left in 'processing' from a previous crash/restart.
+    # Without this, the frontend polls forever showing "Reviewing..." for those manuscripts.
+    await _reset_stuck_processing_manuscripts()
+
     yield
     logger.info("app_shutdown")
+
+
+async def _reset_stuck_processing_manuscripts() -> None:
+    """Mark manuscripts stuck in 'processing' as 'failed' so the UI resolves."""
+    from database import get_db_context
+    from sqlalchemy import text
+    try:
+        async with get_db_context() as db:
+            result = await db.execute(
+                text("UPDATE manuscripts SET status='failed', error_message='Processing was interrupted (server restart). Please retry.' WHERE status='processing'")
+            )
+            count = result.rowcount
+            if count:
+                logger.warning("reset_stuck_manuscripts", count=count)
+            else:
+                logger.info("no_stuck_manuscripts")
+    except Exception as e:
+        logger.error("reset_stuck_manuscripts_error", error=str(e))
+
 
 
 app = FastAPI(

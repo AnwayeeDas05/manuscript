@@ -1,7 +1,9 @@
 """
 Security utilities — JWT creation/verification and password hashing.
 """
+import asyncio
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from typing import Optional
 
 from jose import JWTError, jwt
@@ -15,16 +17,30 @@ settings = get_settings()
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-# ── Password ──────────────────────────────────────────────────────────────────
+# ── Password (sync — do NOT call these directly from async handlers) ───────────
 
 def hash_password(plain: str) -> str:
-    """Hash a plaintext password with bcrypt."""
+    """Hash a plaintext password with bcrypt (sync — use hash_password_async in async code)."""
     return _pwd_context.hash(plain)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Return True if plain matches the bcrypt hash."""
+    """Verify a bcrypt hash (sync — use verify_password_async in async code)."""
     return _pwd_context.verify(plain, hashed)
+
+
+# ── Async wrappers — run bcrypt in a thread pool so the event loop is never blocked ──
+
+async def hash_password_async(plain: str) -> str:
+    """Async-safe bcrypt hashing — offloads the CPU work to a thread pool."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, partial(_pwd_context.hash, plain))
+
+
+async def verify_password_async(plain: str, hashed: str) -> bool:
+    """Async-safe bcrypt verification — offloads the CPU work to a thread pool."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, partial(_pwd_context.verify, plain, hashed))
 
 
 # ── JWT ──────────────────────────────────────────────────────────────────────

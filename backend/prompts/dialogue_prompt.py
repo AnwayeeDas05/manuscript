@@ -27,7 +27,7 @@ REQUIRED JSON OUTPUT FORMAT:
     {{
       "id": "<unique string like 'dial-001'>",
       "chapter": <chapter number or null>,
-      "severity": "<major|minor|suggestion>",
+      "severity": "<critical|major|moderate|minor|suggestion>",
       "title": "<short title>",
       "description": "<clear description with evidence>",
       "evidence": "<exact quote demonstrating the issue>",

@@ -34,21 +34,23 @@ export function formatRelativeTime(dateStr: string): string {
   return formatDate(dateStr);
 }
 
+/** Works on 0–100 scale. */
 export function getScoreColor(score: number): string {
-  if (score >= 8) return "text-emerald-400";
-  if (score >= 6) return "text-yellow-400";
-  if (score >= 4) return "text-orange-400";
+  if (score >= 80) return "text-emerald-400";
+  if (score >= 60) return "text-yellow-400";
+  if (score >= 40) return "text-orange-400";
   return "text-red-400";
 }
 
+/** Works on 0–100 scale. */
 export function getScoreLabel(score: number): string {
-  if (score >= 9) return "Excellent";
-  if (score >= 8) return "Very Good";
-  if (score >= 7) return "Good";
-  if (score >= 6) return "Above Average";
-  if (score >= 5) return "Average";
-  if (score >= 4) return "Below Average";
-  if (score >= 3) return "Poor";
+  if (score >= 90) return "Excellent";
+  if (score >= 80) return "Very Good";
+  if (score >= 70) return "Good";
+  if (score >= 60) return "Above Average";
+  if (score >= 50) return "Average";
+  if (score >= 40) return "Below Average";
+  if (score >= 25) return "Poor";
   return "Needs Major Revision";
 }
 
@@ -59,6 +61,18 @@ export function getStatusColor(status: string): string {
     case "uploaded": return "text-slate-400 bg-slate-400/10";
     case "failed": return "text-red-400 bg-red-400/10";
     default: return "text-slate-400 bg-slate-400/10";
+  }
+}
+
+/** Return colour class for a finding severity badge. */
+export function getSeverityColor(severity: string): string {
+  switch (severity.toLowerCase()) {
+    case "critical":   return "text-red-400 bg-red-500/10 border border-red-500/25";
+    case "major":      return "text-rose-400 bg-rose-500/10 border border-rose-500/20";
+    case "moderate":   return "text-orange-400 bg-orange-500/10 border border-orange-500/20";
+    case "minor":      return "text-amber-400 bg-amber-500/10 border border-amber-500/20";
+    case "suggestion": return "text-slate-400 bg-slate-800 border border-slate-700/50";
+    default:           return "text-slate-400 bg-slate-800 border border-slate-700/50";
   }
 }
 

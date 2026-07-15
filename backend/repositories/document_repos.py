@@ -151,6 +151,9 @@ class EditorialReportRepository:
         executive_summary: str,
         major_count: int,
         minor_count: int,
+        critical_count: int = 0,
+        moderate_count: int = 0,
+        suggestions_count: int = 0,
     ) -> EditorialReport:
         existing_result = await self.db.execute(
             select(EditorialReport).where(
@@ -169,11 +172,15 @@ class EditorialReportRepository:
             executive_summary=executive_summary,
             major_findings_count=str(major_count),
             minor_findings_count=str(minor_count),
+            critical_findings_count=str(critical_count),
+            moderate_findings_count=str(moderate_count),
+            suggestions_count=str(suggestions_count),
         )
         self.db.add(report)
         await self.db.flush()
         await self.db.refresh(report)
         return report
+
 
     async def get_by_manuscript(self, manuscript_id: str) -> Optional[EditorialReport]:
         result = await self.db.execute(

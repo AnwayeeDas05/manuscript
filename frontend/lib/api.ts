@@ -6,6 +6,7 @@ import {
   EditorialReport,
   ReportListResponse,
   DashboardStats,
+  RevisionSummary,
 } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -13,7 +14,8 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v
 class ApiError extends Error {
   constructor(
     public status: number,
-    public detail: string
+    public detail: string,
+    public raw?: unknown
   ) {
     super(detail);
     this.name = "ApiError";
@@ -45,11 +47,13 @@ async function request<T>(
 
   if (!response.ok) {
     let detail = `HTTP ${response.status}`;
+    let raw: unknown;
     try {
-      const err = await response.json();
-      detail = err.detail || JSON.stringify(err);
+      raw = await response.json();
+      const r = raw as Record<string, unknown>;
+      detail = (typeof r.detail === "string" ? r.detail : JSON.stringify(r.detail)) || detail;
     } catch {}
-    throw new ApiError(response.status, detail);
+    throw new ApiError(response.status, detail, raw);
   }
 
   if (response.status === 204) {
@@ -86,10 +90,16 @@ export const manuscriptsApi = {
     request<Manuscript>(`/manuscripts/${id}/process`, { method: "POST" }, token),
 
   getDocument: (id: string, token: string) =>
-    request<any>(`/manuscripts/${id}/document`, {}, token),
+    request<unknown>(`/manuscripts/${id}/document`, {}, token),
 
   delete: (id: string, token: string) =>
     request<null>(`/manuscripts/${id}`, { method: "DELETE" }, token),
+
+  getVersions: (id: string, token: string) =>
+    request<ManuscriptListResponse>(`/manuscripts/${id}/versions`, {}, token),
+
+  getRevisionSummary: (id: string, token: string) =>
+    request<RevisionSummary>(`/manuscripts/${id}/revision-summary`, {}, token),
 };
 
 export const reportsApi = {

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.user import User
-from utils.security import hash_password
+from utils.security import hash_password_async
 
 
 class UserRepository:
@@ -25,7 +25,7 @@ class UserRepository:
             email=email,
             username=username,
             full_name=full_name,
-            hashed_password=hash_password(plain_password),
+            hashed_password=await hash_password_async(plain_password),
         )
         self.db.add(user)
         await self.db.flush()  # get generated ID without full commit

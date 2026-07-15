@@ -2,17 +2,25 @@
 
 import React, { useEffect, useState, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import DashboardLayout from "../../../components/layout/DashboardLayout";
 import { useAuth } from "../../../components/AuthContext";
 import { useToast } from "../../../components/Toast";
 import { manuscriptsApi, reportsApi, ApiError } from "../../../lib/api";
-import { Manuscript, EditorialReport, FullReport, Finding } from "../../../lib/types";
+import {
+  Manuscript,
+  EditorialReport,
+  FullReport,
+  Finding,
+  RevisionSummary,
+} from "../../../lib/types";
 import {
   formatBytes,
   formatDate,
   getScoreColor,
   getScoreLabel,
   getStatusColor,
+  getSeverityColor,
 } from "../../../lib/utils";
 import {
   BookOpen,
@@ -25,14 +33,22 @@ import {
   CheckCircle2,
   ChevronRight,
   TrendingUp,
+  TrendingDown,
   User,
-  ExternalLink,
+  GitBranch,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+  XCircle,
+  AlertCircle,
+  Info,
 } from "lucide-react";
 
 export default function ManuscriptDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: manuscriptId } = use(params);
   const { token } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
 
   const [manuscript, setManuscript] = useState<Manuscript | null>(null);
   const [report, setReport] = useState<EditorialReport | null>(null);
@@ -40,7 +56,11 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
   const [loading, setLoading] = useState(true);
   const [processingState, setProcessingState] = useState<string>("idle");
 
-  // Filters for findings
+  // Version history
+  const [versions, setVersions] = useState<Manuscript[]>([]);
+  const [revisionSummary, setRevisionSummary] = useState<RevisionSummary | null>(null);
+
+  // Findings filters
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedSeverity, setSelectedSeverity] = useState<string>("all");
 
@@ -50,15 +70,27 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
       const ms = await manuscriptsApi.get(manuscriptId, token);
       setManuscript(ms);
 
+      // Load version history
+      try {
+        const vData = await manuscriptsApi.getVersions(manuscriptId, token);
+        setVersions(vData.manuscripts);
+      } catch {}
+
       if (ms.status === "completed") {
         try {
           const rep = await reportsApi.getByManuscript(manuscriptId, token);
           setReport(rep);
-          if (rep.report_json) {
-            setParsedReport(JSON.parse(rep.report_json));
-          }
+          if (rep.report_json) setParsedReport(JSON.parse(rep.report_json));
         } catch (repErr) {
           console.error("Report fetch error:", repErr);
+        }
+
+        // Load revision summary if this is version > 1
+        if (ms.version_number > 1) {
+          try {
+            const rev = await manuscriptsApi.getRevisionSummary(manuscriptId, token);
+            setRevisionSummary(rev);
+          } catch {}
         }
       }
     } catch (err) {
@@ -73,9 +105,7 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
   };
 
   useEffect(() => {
-    if (token) {
-      loadManuscriptAndReport();
-    }
+    if (token) loadManuscriptAndReport();
   }, [token]);
 
   // Polling for processing updates
@@ -93,7 +123,7 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
           loadManuscriptAndReport();
         } else if (ms.status === "failed") {
           clearInterval(interval);
-          toast("Processing failed. See error details.", "error");
+          toast("Processing failed.", "error");
           loadManuscriptAndReport();
         }
       } catch (err) {
@@ -112,11 +142,7 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
       toast("Review processing started.", "info");
       await loadManuscriptAndReport();
     } catch (err) {
-      if (err instanceof ApiError) {
-        toast(err.detail, "error");
-      } else {
-        toast("Failed to start review processing.", "error");
-      }
+      toast(err instanceof ApiError ? err.detail : "Failed to start review.", "error");
     } finally {
       setProcessingState("idle");
     }
@@ -134,7 +160,7 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
       document.body.appendChild(a);
       a.click();
       a.remove();
-    } catch (err) {
+    } catch {
       toast("Failed to download report.", "error");
     }
   };
@@ -158,15 +184,14 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
           <p className="text-slate-400 text-sm">
             The requested manuscript could not be found or you do not have permission to view it.
           </p>
-          <Link href="/manuscripts" className="text-indigo-400 hover:underline">
-            Back to Manuscripts
-          </Link>
+          <Link href="/manuscripts" className="text-indigo-400 hover:underline">Back to Manuscripts</Link>
         </div>
       </DashboardLayout>
     );
   }
 
-  const allFindings = [
+  // Collect all findings for the filter panel
+  const allFindings: (Finding & { category: string })[] = [
     ...(parsedReport?.character_analysis.findings.map(f => ({ ...f, category: "Character" })) || []),
     ...(parsedReport?.plot_analysis.findings.map(f => ({ ...f, category: "Plot" })) || []),
     ...(parsedReport?.timeline_analysis.findings.map(f => ({ ...f, category: "Timeline" })) || []),
@@ -179,6 +204,30 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
     return catMatch && sevMatch;
   });
 
+  // Severity counts
+  const countBySeverity = (sev: string) => allFindings.filter(f => f.severity === sev).length;
+  const criticalCount = parsedReport ? (parsedReport.critical_findings?.length ?? countBySeverity("critical")) : 0;
+  const majorCount = parsedReport ? (parsedReport.major_findings?.length ?? countBySeverity("major")) : 0;
+  const moderateCount = parsedReport ? (parsedReport.moderate_findings?.length ?? countBySeverity("moderate")) : 0;
+  const minorCount = parsedReport ? (parsedReport.minor_findings?.length ?? countBySeverity("minor")) : 0;
+  const suggCount = parsedReport ? (parsedReport.suggestions?.length ?? countBySeverity("suggestion")) : 0;
+
+  const scoreChangeBadge = revisionSummary ? (
+    revisionSummary.score_change > 0 ? (
+      <span className="inline-flex items-center gap-1 text-emerald-400 text-sm font-bold">
+        <ArrowUpRight className="w-4 h-4" /> +{revisionSummary.score_change.toFixed(1)} pts
+      </span>
+    ) : revisionSummary.score_change < 0 ? (
+      <span className="inline-flex items-center gap-1 text-rose-400 text-sm font-bold">
+        <ArrowDownRight className="w-4 h-4" /> {revisionSummary.score_change.toFixed(1)} pts
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 text-slate-400 text-sm font-bold">
+        <Minus className="w-4 h-4" /> No change
+      </span>
+    )
+  ) : null;
+
   return (
     <DashboardLayout>
       <div className="p-6 md:p-10 max-w-7xl mx-auto w-full space-y-8">
@@ -187,295 +236,369 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
           <Link href="/manuscripts" className="hover:text-slate-350 transition-colors">Manuscripts</Link>
           <ChevronRight className="w-3 h-3" />
           <span className="text-slate-400 truncate">{manuscript.title}</span>
-        </div>
-
-        {/* Header Box */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-900/30 border border-slate-800/80 p-6 rounded-2xl">
-          <div className="space-y-2">
-            <h1 className="text-2xl font-bold text-slate-100">{manuscript.title}</h1>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400">
-              <span className="flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-slate-500" />
-                {manuscript.author || "Unknown Author"}
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                Uploaded {formatDate(manuscript.created_at)}
-              </span>
-              <span>•</span>
-              <span>{formatBytes(manuscript.file_size_bytes)}</span>
-              {manuscript.word_count && (
-                <>
-                  <span>•</span>
-                  <span>{manuscript.word_count.toLocaleString()} words</span>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <span
-              className={`text-xs px-3 py-1.5 rounded-full font-semibold uppercase tracking-wider ${getStatusColor(
-                manuscript.status
-              )}`}
-            >
-              {manuscript.status}
+          {manuscript.version_number > 1 && (
+            <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 font-semibold">
+              v{manuscript.version_number}
             </span>
-            {manuscript.status === "completed" && report && (
-              <button
-                onClick={handleDownloadJson}
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 rounded-xl transition-all"
-              >
-                <Download className="w-4 h-4" />
-                JSON Report
-              </button>
-            )}
-          </div>
+          )}
         </div>
 
-        {/* Status Processing Board */}
-        {manuscript.status !== "completed" && (
-          <div className="bg-slate-900/20 border border-slate-800/80 rounded-2xl p-6 md:p-8 space-y-6">
-            <div className="text-center max-w-md mx-auto space-y-3">
-              {manuscript.status === "processing" ? (
-                <>
-                  <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mx-auto" />
-                  <h3 className="text-lg font-bold">AI Review Running</h3>
-                  <p className="text-sm text-slate-400 leading-relaxed">
-                    We are currently parsing chapters, running spaCy named entity extractors, and executing character, plot, timeline, and dialogue reviewer agents. This might take up to a minute.
-                  </p>
-                </>
-              ) : manuscript.status === "failed" ? (
-                <>
-                  <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto" />
-                  <h3 className="text-lg font-bold text-rose-400">Processing Failed</h3>
-                  <p className="text-sm text-slate-400 leading-relaxed">
-                    {manuscript.error_message || "An error occurred during agent analysis."}
-                  </p>
+        <div className="grid lg:grid-cols-[1fr_260px] gap-8 items-start">
+          {/* ── Main Content ─────────────────────────────────────────────── */}
+          <div className="space-y-8 min-w-0">
+            {/* Header Box */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-900/30 border border-slate-800/80 p-6 rounded-2xl">
+              <div className="space-y-2">
+                <h1 className="text-2xl font-bold text-slate-100">{manuscript.title}</h1>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400">
+                  <span className="flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-slate-500" />
+                    {manuscript.author || "Unknown Author"}
+                  </span>
+                  <span>•</span>
+                  <span className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                    Uploaded {formatDate(manuscript.created_at)}
+                  </span>
+                  <span>•</span>
+                  <span>{formatBytes(manuscript.file_size_bytes)}</span>
+                  {manuscript.word_count && (
+                    <><span>•</span><span>{manuscript.word_count.toLocaleString()} words</span></>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <span className={`text-xs px-3 py-1.5 rounded-full font-semibold uppercase tracking-wider ${getStatusColor(manuscript.status)}`}>
+                  {manuscript.status}
+                </span>
+                {manuscript.status === "completed" && report && (
                   <button
-                    onClick={handleStartProcess}
-                    disabled={processingState === "starting"}
-                    className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold text-white px-5 py-2.5 rounded-xl transition-all disabled:opacity-50"
+                    onClick={handleDownloadJson}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 rounded-xl transition-all"
                   >
-                    <Play className="w-4 h-4 fill-current" />
-                    Retry Analysis
+                    <Download className="w-4 h-4" />JSON Report
                   </button>
-                </>
-              ) : (
-                <>
-                  <BookOpen className="w-12 h-12 text-indigo-400 mx-auto" />
-                  <h3 className="text-lg font-bold">Manuscript Registered</h3>
-                  <p className="text-sm text-slate-400 leading-relaxed">
-                    This manuscript is uploaded but has not been parsed or reviewed yet.
-                  </p>
-                  <button
-                    onClick={handleStartProcess}
-                    disabled={processingState === "starting"}
-                    className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold text-white px-5 py-2.5 rounded-xl transition-all disabled:opacity-50"
-                  >
-                    <Play className="w-4 h-4 fill-current" />
-                    Run AI Review Workflow
-                  </button>
-                </>
-              )}
+                )}
+              </div>
             </div>
 
-            {/* Workflow Pipeline Progress Indicator */}
-            {manuscript.status === "processing" && (
-              <div className="grid md:grid-cols-4 gap-4 max-w-3xl mx-auto pt-6 border-t border-slate-800/60 text-center">
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-slate-350">1. Text Parsing</p>
-                  <p className="text-[10px] text-slate-500">Extracting chapters</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-slate-350">2. Named Entities</p>
-                  <p className="text-[10px] text-slate-500">spaCy annotations</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-slate-350">3. Specialist Reviewers</p>
-                  <p className="text-[10px] text-slate-500">Character, Plot, Dialogue</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-slate-350">4. Editorial Merge</p>
-                  <p className="text-[10px] text-slate-500">Chief editor compilation</p>
+            {/* Status / Processing Board */}
+            {manuscript.status !== "completed" && (
+              <div className="bg-slate-900/20 border border-slate-800/80 rounded-2xl p-6 md:p-8 space-y-6">
+                <div className="text-center max-w-md mx-auto space-y-3">
+                  {manuscript.status === "processing" ? (
+                    <>
+                      <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mx-auto" />
+                      <h3 className="text-lg font-bold">AI Review Running</h3>
+                      <p className="text-sm text-slate-400 leading-relaxed">
+                        Parsing chapters, running spaCy NER, executing specialist reviewer agents…
+                      </p>
+                    </>
+                  ) : manuscript.status === "failed" ? (
+                    <>
+                      <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto" />
+                      <h3 className="text-lg font-bold text-rose-400">Processing Failed</h3>
+                      <p className="text-sm text-slate-400">{manuscript.error_message || "An error occurred."}</p>
+                      <button
+                        onClick={handleStartProcess}
+                        disabled={processingState === "starting"}
+                        className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold text-white px-5 py-2.5 rounded-xl transition-all disabled:opacity-50"
+                      >
+                        <Play className="w-4 h-4 fill-current" /> Retry Analysis
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <BookOpen className="w-12 h-12 text-indigo-400 mx-auto" />
+                      <h3 className="text-lg font-bold">Manuscript Registered</h3>
+                      <p className="text-sm text-slate-400">This manuscript is uploaded but has not been reviewed yet.</p>
+                      <button
+                        onClick={handleStartProcess}
+                        disabled={processingState === "starting"}
+                        className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold text-white px-5 py-2.5 rounded-xl transition-all disabled:opacity-50"
+                      >
+                        <Play className="w-4 h-4 fill-current" /> Run AI Review Workflow
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )}
-          </div>
-        )}
 
-        {/* Editorial Report View */}
-        {manuscript.status === "completed" && parsedReport && (
-          <div className="space-y-8">
-            {/* Top Score Summary Board */}
-            <div className="grid md:grid-cols-3 gap-6">
-              {/* Overall Score */}
-              <div className="bg-slate-900/30 border border-slate-800/80 p-6 rounded-2xl flex flex-col justify-center items-center text-center space-y-4">
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Overall Score</span>
-                <div className="relative flex items-center justify-center">
-                  {/* Circle score number badge */}
-                  <span className={`text-5xl font-black ${getScoreColor(parsedReport.overall_score)}`}>
-                    {parsedReport.overall_score}
-                  </span>
-                  <span className="text-slate-600 font-medium text-lg ml-0.5">/10</span>
-                </div>
-                <div className="space-y-1">
-                  <p className="font-bold text-sm text-slate-200">{getScoreLabel(parsedReport.overall_score)}</p>
-                  <p className="text-xs text-slate-500">Compiled from multi-agent evaluations</p>
-                </div>
-              </div>
-
-              {/* Executive Summary */}
-              <div className="md:col-span-2 bg-slate-900/30 border border-slate-800/80 p-6 rounded-2xl space-y-3 flex flex-col justify-between">
-                <div className="space-y-2">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Executive Summary</span>
-                  <p className="text-sm text-slate-300 leading-relaxed">
-                    {parsedReport.executive_summary}
-                  </p>
-                </div>
-                <div className="flex gap-4 border-t border-slate-800/60 pt-4 text-xs text-slate-400">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-rose-500" />
-                    {parsedReport.major_findings.length} Major Problems
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    {parsedReport.minor_findings.length} Minor Problems
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Individual Reviewer Agents Ratings */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-              {[
-                { name: "Character Review", data: parsedReport.character_analysis },
-                { name: "Plot Structure", data: parsedReport.plot_analysis },
-                { name: "Timeline review", data: parsedReport.timeline_analysis },
-                { name: "Dialogue & Voice", data: parsedReport.dialogue_analysis },
-              ].map((agent) => (
-                <div key={agent.name} className="bg-slate-900/30 border border-slate-800/80 p-5 rounded-2xl space-y-2">
-                  <span className="text-xs font-medium text-slate-500">{agent.name}</span>
-                  <div className="flex items-baseline gap-1">
-                    <span className={`text-xl font-bold ${getScoreColor(agent.data.score)}`}>{agent.data.score}</span>
-                    <span className="text-slate-600 text-xs">/10</span>
+            {/* Editorial Report */}
+            {manuscript.status === "completed" && parsedReport && (
+              <div className="space-y-8">
+                {/* Score Summary */}
+                <div className="grid md:grid-cols-3 gap-6">
+                  <div className="bg-slate-900/30 border border-slate-800/80 p-6 rounded-2xl flex flex-col justify-center items-center text-center space-y-4">
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Overall Score</span>
+                    <div className="flex items-baseline gap-1">
+                      <span className={`text-5xl font-black ${getScoreColor(parsedReport.overall_score)}`}>
+                        {parsedReport.overall_score}
+                      </span>
+                      <span className="text-slate-600 font-medium text-lg">/100</span>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-bold text-sm text-slate-200">{getScoreLabel(parsedReport.overall_score)}</p>
+                      <p className="text-xs text-slate-500">Severity-weighted score</p>
+                    </div>
                   </div>
-                  <p className="text-[10px] text-slate-450 line-clamp-2 leading-normal">{agent.data.summary}</p>
-                </div>
-              ))}
-            </div>
 
-            {/* Recommendations Panel */}
-            {parsedReport.recommendations && parsedReport.recommendations.length > 0 && (
-              <div className="bg-indigo-950/5 border border-indigo-950/20 p-6 rounded-2xl space-y-4">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-indigo-400" />
-                  <h3 className="font-bold text-sm text-slate-200">Chief Editor Action Recommendations</h3>
+                  <div className="md:col-span-2 bg-slate-900/30 border border-slate-800/80 p-6 rounded-2xl space-y-3 flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Executive Summary</span>
+                      <p className="text-sm text-slate-300 leading-relaxed">{parsedReport.executive_summary}</p>
+                    </div>
+                    {/* 5-Severity Counts */}
+                    <div className="flex flex-wrap gap-3 border-t border-slate-800/60 pt-4 text-xs">
+                      {[
+                        { label: "Critical", count: criticalCount, color: "text-red-400" },
+                        { label: "Major", count: majorCount, color: "text-rose-400" },
+                        { label: "Moderate", count: moderateCount, color: "text-orange-400" },
+                        { label: "Minor", count: minorCount, color: "text-amber-400" },
+                        { label: "Suggestions", count: suggCount, color: "text-slate-400" },
+                      ].map(({ label, count, color }) => (
+                        <span key={label} className="flex items-center gap-1.5 text-slate-400">
+                          <span className={`w-2 h-2 rounded-full ${color.replace("text-", "bg-")}`} />
+                          <span className={`font-bold ${color}`}>{count}</span> {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <ul className="grid sm:grid-cols-3 gap-4">
-                  {parsedReport.recommendations.map((rec, index) => (
-                    <li key={index} className="bg-slate-900/40 p-4 rounded-xl border border-slate-800/40 text-xs text-slate-350 leading-relaxed relative pl-8">
-                      <span className="absolute left-3 top-4 text-indigo-400 font-bold text-xs">{index + 1}.</span>
-                      {rec}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
 
-            {/* Findings Filter Bar */}
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
-                <h2 className="text-lg font-bold text-slate-200">Detailed Editorial Findings ({filteredFindings.length})</h2>
-                <div className="flex items-center gap-3">
-                  {/* Category Filter */}
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="px-3 py-1.5 bg-slate-950/60 border border-slate-800 rounded-lg text-xs text-slate-400 outline-none"
-                  >
-                    <option value="all">All Sections</option>
-                    <option value="character">Character</option>
-                    <option value="plot">Plot</option>
-                    <option value="timeline">Timeline</option>
-                    <option value="dialogue">Dialogue</option>
-                  </select>
-
-                  {/* Severity Filter */}
-                  <select
-                    value={selectedSeverity}
-                    onChange={(e) => setSelectedSeverity(e.target.value)}
-                    className="px-3 py-1.5 bg-slate-950/60 border border-slate-800 rounded-lg text-xs text-slate-400 outline-none"
-                  >
-                    <option value="all">All Severities</option>
-                    <option value="major">Major</option>
-                    <option value="minor">Minor</option>
-                    <option value="suggestion">Suggestion</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Findings List */}
-              {filteredFindings.length === 0 ? (
-                <div className="text-center py-10 text-slate-500 border border-slate-850 bg-slate-900/5 rounded-2xl">
-                  No findings match selected filters.
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {filteredFindings.map((finding) => (
-                    <div
-                      key={finding.id}
-                      className="bg-slate-900/25 border border-slate-800/60 hover:border-slate-800 rounded-xl p-5 space-y-4 transition-colors"
-                    >
-                      {/* Severity Header badge */}
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                              finding.severity === "major"
-                                ? "text-rose-400 bg-rose-500/10 border border-rose-500/20"
-                                : finding.severity === "minor"
-                                ? "text-amber-400 bg-amber-500/10 border border-amber-500/20"
-                                : "text-slate-400 bg-slate-800 border border-slate-700/50"
-                            }`}
-                          >
-                            {finding.severity}
-                          </span>
-                          <span className="text-[10px] font-medium text-slate-500">
-                            Category: {finding.category}
-                          </span>
-                        </div>
-                        {finding.chapter && (
-                          <span className="text-xs text-slate-500">Chapter {finding.chapter}</span>
-                        )}
+                {/* Per-Agent Scores */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+                  {[
+                    { name: "Character", data: parsedReport.character_analysis },
+                    { name: "Plot", data: parsedReport.plot_analysis },
+                    { name: "Timeline", data: parsedReport.timeline_analysis },
+                    { name: "Dialogue", data: parsedReport.dialogue_analysis },
+                  ].map((agent) => (
+                    <div key={agent.name} className="bg-slate-900/30 border border-slate-800/80 p-5 rounded-2xl space-y-2">
+                      <span className="text-xs font-medium text-slate-500">{agent.name}</span>
+                      <div className="flex items-baseline gap-1">
+                        <span className={`text-xl font-bold ${getScoreColor(agent.data.score * 10)}`}>{agent.data.score}</span>
+                        <span className="text-slate-600 text-xs">/10</span>
                       </div>
-
-                      {/* Issue Description */}
-                      <div className="space-y-1.5">
-                        <h4 className="font-bold text-sm text-slate-200">{finding.title}</h4>
-                        <p className="text-xs text-slate-450 leading-relaxed">{finding.description}</p>
-                      </div>
-
-                      {/* Evidence exact quote */}
-                      {finding.evidence && (
-                        <div className="p-3 bg-slate-950/60 border-l-2 border-slate-800 rounded-r-lg text-xs italic text-slate-400 leading-normal">
-                          "{finding.evidence}"
-                        </div>
-                      )}
-
-                      {/* Recommendation fix */}
-                      <div className="text-xs text-slate-400 bg-indigo-500/5 p-3 rounded-lg border border-indigo-500/10 space-y-1">
-                        <span className="font-semibold text-indigo-400">Action Fix Recommendation:</span>
-                        <p className="leading-relaxed">{finding.recommendation}</p>
-                      </div>
+                      <p className="text-[10px] text-slate-450 line-clamp-2 leading-normal">{agent.data.summary}</p>
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+
+                {/* Revision Comparison (v2+) */}
+                {revisionSummary && (
+                  <div className="bg-slate-900/30 border border-slate-700/60 rounded-2xl p-6 space-y-5">
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <div className="flex items-center gap-2">
+                        <GitBranch className="w-5 h-5 text-indigo-400" />
+                        <h3 className="font-bold text-slate-200">
+                          Revision Summary — v{revisionSummary.from_version} → v{revisionSummary.to_version}
+                        </h3>
+                      </div>
+                      {scoreChangeBadge}
+                    </div>
+                    <p className="text-sm text-slate-400 leading-relaxed">{revisionSummary.summary}</p>
+
+                    <div className="grid md:grid-cols-3 gap-4">
+                      {/* Fixed */}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400 uppercase tracking-wider">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Fixed ({revisionSummary.issues_fixed.length})
+                        </div>
+                        {revisionSummary.issues_fixed.length === 0 ? (
+                          <p className="text-xs text-slate-600 italic">None</p>
+                        ) : (
+                          <ul className="space-y-1.5">
+                            {revisionSummary.issues_fixed.map((issue, i) => (
+                              <li key={i} className="text-xs text-slate-300 bg-emerald-500/5 border border-emerald-500/15 rounded-lg px-3 py-2">
+                                ✓ {issue.title}
+                                {issue.severity && <span className="ml-1 text-slate-500">({issue.severity})</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      {/* Still Present */}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider">
+                          <AlertCircle className="w-3.5 h-3.5" /> Still Present ({revisionSummary.issues_still_present.length})
+                        </div>
+                        {revisionSummary.issues_still_present.length === 0 ? (
+                          <p className="text-xs text-slate-600 italic">None</p>
+                        ) : (
+                          <ul className="space-y-1.5">
+                            {revisionSummary.issues_still_present.map((issue, i) => (
+                              <li key={i} className="text-xs text-slate-300 bg-amber-500/5 border border-amber-500/15 rounded-lg px-3 py-2">
+                                ⚠ {issue.title}
+                                {issue.severity && <span className="ml-1 text-slate-500">({issue.severity})</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      {/* New Issues */}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-rose-400 uppercase tracking-wider">
+                          <XCircle className="w-3.5 h-3.5" /> New Issues ({revisionSummary.new_issues.length})
+                        </div>
+                        {revisionSummary.new_issues.length === 0 ? (
+                          <p className="text-xs text-slate-600 italic">None</p>
+                        ) : (
+                          <ul className="space-y-1.5">
+                            {revisionSummary.new_issues.map((issue, i) => (
+                              <li key={i} className="text-xs text-slate-300 bg-rose-500/5 border border-rose-500/15 rounded-lg px-3 py-2">
+                                ✗ {issue.title}
+                                {issue.severity && <span className="ml-1 text-slate-500">({issue.severity})</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Recommendations */}
+                {parsedReport.recommendations && parsedReport.recommendations.length > 0 && (
+                  <div className="bg-indigo-950/5 border border-indigo-950/20 p-6 rounded-2xl space-y-4">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-indigo-400" />
+                      <h3 className="font-bold text-sm text-slate-200">Chief Editor Action Recommendations</h3>
+                    </div>
+                    <ul className="grid sm:grid-cols-3 gap-4">
+                      {parsedReport.recommendations.map((rec, index) => (
+                        <li key={index} className="bg-slate-900/40 p-4 rounded-xl border border-slate-800/40 text-xs text-slate-350 leading-relaxed relative pl-8">
+                          <span className="absolute left-3 top-4 text-indigo-400 font-bold text-xs">{index + 1}.</span>
+                          {rec}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Findings Filter Bar */}
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+                    <h2 className="text-lg font-bold text-slate-200">Detailed Editorial Findings ({filteredFindings.length})</h2>
+                    <div className="flex items-center gap-3">
+                      <select
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        className="px-3 py-1.5 bg-slate-950/60 border border-slate-800 rounded-lg text-xs text-slate-400 outline-none"
+                      >
+                        <option value="all">All Sections</option>
+                        <option value="character">Character</option>
+                        <option value="plot">Plot</option>
+                        <option value="timeline">Timeline</option>
+                        <option value="dialogue">Dialogue</option>
+                      </select>
+                      <select
+                        value={selectedSeverity}
+                        onChange={(e) => setSelectedSeverity(e.target.value)}
+                        className="px-3 py-1.5 bg-slate-950/60 border border-slate-800 rounded-lg text-xs text-slate-400 outline-none"
+                      >
+                        <option value="all">All Severities</option>
+                        <option value="critical">Critical</option>
+                        <option value="major">Major</option>
+                        <option value="moderate">Moderate</option>
+                        <option value="minor">Minor</option>
+                        <option value="suggestion">Suggestion</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {filteredFindings.length === 0 ? (
+                    <div className="text-center py-10 text-slate-500 border border-slate-850 bg-slate-900/5 rounded-2xl">
+                      No findings match selected filters.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredFindings.map((finding) => (
+                        <div
+                          key={finding.id}
+                          className="bg-slate-900/25 border border-slate-800/60 hover:border-slate-800 rounded-xl p-5 space-y-4 transition-colors"
+                        >
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${getSeverityColor(finding.severity)}`}>
+                                {finding.severity}
+                              </span>
+                              <span className="text-[10px] font-medium text-slate-500">
+                                Category: {finding.category}
+                              </span>
+                            </div>
+                            {finding.chapter && (
+                              <span className="text-xs text-slate-500">Chapter {finding.chapter}</span>
+                            )}
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <h4 className="font-bold text-sm text-slate-200">{finding.title}</h4>
+                            <p className="text-xs text-slate-450 leading-relaxed">{finding.description}</p>
+                          </div>
+
+                          {finding.evidence && (
+                            <div className="p-3 bg-slate-950/60 border-l-2 border-slate-800 rounded-r-lg text-xs italic text-slate-400 leading-normal">
+                              &ldquo;{finding.evidence}&rdquo;
+                            </div>
+                          )}
+
+                          <div className="text-xs text-slate-400 bg-indigo-500/5 p-3 rounded-lg border border-indigo-500/10 space-y-1">
+                            <span className="font-semibold text-indigo-400">Action Fix Recommendation:</span>
+                            <p className="leading-relaxed">{finding.recommendation}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* ── Version History Sidebar ──────────────────────────────────── */}
+          {versions.length > 0 && (
+            <aside className="bg-slate-900/30 border border-slate-800/80 rounded-2xl p-5 space-y-4 lg:sticky lg:top-6">
+              <div className="flex items-center gap-2">
+                <GitBranch className="w-4 h-4 text-indigo-400" />
+                <h3 className="font-bold text-sm text-slate-200">Revision History</h3>
+                <span className="ml-auto text-xs text-slate-500">{versions.length} version{versions.length !== 1 ? "s" : ""}</span>
+              </div>
+              <ul className="space-y-2">
+                {versions.map((v) => {
+                  const isCurrent = v.id === manuscriptId;
+                  return (
+                    <li key={v.id}>
+                      <button
+                        onClick={() => router.push(`/manuscripts/${v.id}`)}
+                        className={`w-full text-left px-3 py-3 rounded-xl border transition-all space-y-1 ${
+                          isCurrent
+                            ? "bg-indigo-600/15 border-indigo-500/30 cursor-default"
+                            : "border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/30"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`text-xs font-bold ${isCurrent ? "text-indigo-400" : "text-slate-300"}`}>
+                            Version {v.version_number}
+                            {isCurrent && <span className="ml-2 text-[9px] text-indigo-400 bg-indigo-400/10 px-1.5 py-0.5 rounded-full">current</span>}
+                          </span>
+                          <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider ${getStatusColor(v.status)}`}>
+                            {v.status}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500">{formatDate(v.created_at)}</p>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </aside>
+          )}
+        </div>
       </div>
     </DashboardLayout>
   );

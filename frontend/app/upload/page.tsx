@@ -7,7 +7,7 @@ import { useAuth } from "../../components/AuthContext";
 import { useToast } from "../../components/Toast";
 import { manuscriptsApi, ApiError } from "../../lib/api";
 import { formatBytes } from "../../lib/utils";
-import { Upload, File, Sparkles, X, Loader2, Info } from "lucide-react";
+import { Upload, File, Sparkles, X, Loader2, GitBranch, FilePlus } from "lucide-react";
 
 export default function UploadPage() {
   const router = useRouter();
@@ -22,86 +22,77 @@ export default function UploadPage() {
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Duplicate modal state
+  const [duplicateModal, setDuplicateModal] = useState(false);
+  const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(true);
   };
 
-  const handleDragLeave = () => {
-    setDragOver(false);
-  };
+  const handleDragLeave = () => setDragOver(false);
 
   const validateAndSetFile = (selectedFile: File) => {
     const name = selectedFile.name.toLowerCase();
-    const isAllowed = name.endsWith(".pdf") || name.endsWith(".docx");
-    if (!isAllowed) {
+    if (!name.endsWith(".pdf") && !name.endsWith(".docx")) {
       toast("Unsupported file type. Please upload a PDF or DOCX file.", "error");
       return;
     }
-
-    const maxSize = 50 * 1024 * 1024; // 50MB
-    if (selectedFile.size > maxSize) {
+    if (selectedFile.size > 50 * 1024 * 1024) {
       toast("File size exceeds 50MB limit.", "error");
       return;
     }
-
     setFile(selectedFile);
-    // Auto-fill title from filename if empty
     if (!title) {
-      const baseName = selectedFile.name.substring(0, selectedFile.name.lastIndexOf("."));
-      setTitle(baseName);
+      setTitle(selectedFile.name.substring(0, selectedFile.name.lastIndexOf(".")));
     }
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      validateAndSetFile(e.dataTransfer.files[0]);
-    }
+    if (e.dataTransfer.files?.[0]) validateAndSetFile(e.dataTransfer.files[0]);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      validateAndSetFile(e.target.files[0]);
-    }
+    if (e.target.files?.[0]) validateAndSetFile(e.target.files[0]);
   };
 
   const handleRemoveFile = () => {
     setFile(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file) {
-      toast("Please select a file to upload", "warning");
-      return;
-    }
-    if (!title.trim()) {
-      toast("Please specify a manuscript title", "warning");
-      return;
-    }
-    if (!token) return;
-
-    setSubmitting(true);
+  const buildFormData = (uploadMode?: string): FormData => {
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", file!);
     formData.append("title", title);
-    if (author) {
-      formData.append("author", author);
-    }
+    if (author) formData.append("author", author);
     formData.append("auto_process", String(autoProcess));
+    if (uploadMode) formData.append("upload_mode", uploadMode);
+    return formData;
+  };
 
+  const submitUpload = async (uploadMode?: string) => {
+    if (!token) return;
+    setSubmitting(true);
+    const formData = buildFormData(uploadMode);
     try {
       const result = await manuscriptsApi.upload(formData, token);
-      toast("Manuscript uploaded successfully!", "success");
-      // Redirect to the newly created manuscript view
-      router.push(`/manuscripts/${result.id}`);
+      toast(
+        uploadMode === "version"
+          ? `Version ${(result as { version_number?: number }).version_number ?? ""} uploaded successfully!`
+          : "Manuscript uploaded successfully!",
+        "success"
+      );
+      router.push(`/manuscripts/${(result as { id: string }).id}`);
     } catch (err) {
-      if (err instanceof ApiError) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Duplicate detected — show modal
+        setPendingFormData(formData);
+        setDuplicateModal(true);
+      } else if (err instanceof ApiError) {
         toast(err.detail, "error");
       } else {
         toast("Failed to upload manuscript.", "error");
@@ -111,13 +102,25 @@ export default function UploadPage() {
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file) { toast("Please select a file to upload", "warning"); return; }
+    if (!title.trim()) { toast("Please specify a manuscript title", "warning"); return; }
+    await submitUpload();
+  };
+
+  const handleDuplicateChoice = async (mode: "version" | "new") => {
+    setDuplicateModal(false);
+    await submitUpload(mode);
+  };
+
   return (
     <DashboardLayout>
       <div className="p-6 md:p-10 max-w-3xl mx-auto w-full space-y-8">
         <div className="space-y-1.5">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Upload Manuscript</h1>
           <p className="text-slate-400 text-sm">
-            Import your document to analyze and coordinate AI reviews.
+            Import your document to analyse and coordinate AI reviews.
           </p>
         </div>
 
@@ -150,9 +153,7 @@ export default function UploadPage() {
                   <Upload className="w-5 h-5" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold text-slate-300">
-                    Click to upload or drag & drop
-                  </p>
+                  <p className="text-sm font-semibold text-slate-300">Click to upload or drag & drop</p>
                   <p className="text-xs text-slate-500">PDF or DOCX files up to 50MB</p>
                 </div>
               </div>
@@ -169,10 +170,7 @@ export default function UploadPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemoveFile();
-                  }}
+                  onClick={(e) => { e.stopPropagation(); handleRemoveFile(); }}
                   className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
                 >
                   <X className="w-4 h-4" />
@@ -211,7 +209,7 @@ export default function UploadPage() {
             </div>
           </div>
 
-          {/* AI review activation settings */}
+          {/* AI review toggle */}
           <div className="flex items-start gap-3 p-4 bg-indigo-950/5 border border-indigo-950/20 rounded-xl">
             <input
               type="checkbox"
@@ -225,7 +223,7 @@ export default function UploadPage() {
                 Automatically run AI Review
               </label>
               <p className="text-xs text-slate-500 leading-normal">
-                Kick off the multi-agent LangGraph workflow immediately. It extracts named entities and generates standard editorial report evaluations.
+                Kick off the multi-agent LangGraph workflow immediately. It extracts named entities and generates a full editorial report.
               </p>
             </div>
           </div>
@@ -238,7 +236,7 @@ export default function UploadPage() {
             {submitting ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Uploading and Registering...
+                Uploading...
               </>
             ) : (
               <>
@@ -249,6 +247,62 @@ export default function UploadPage() {
           </button>
         </form>
       </div>
+
+      {/* Duplicate Manuscript Modal */}
+      {duplicateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-md w-full space-y-6 shadow-2xl">
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold text-slate-100">Duplicate Title Detected</h2>
+              <p className="text-sm text-slate-400 leading-relaxed">
+                A manuscript titled <span className="font-semibold text-slate-200">&ldquo;{title}&rdquo;</span> already exists in your library.
+                How would you like to proceed?
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => handleDuplicateChoice("version")}
+                disabled={submitting}
+                className="w-full flex items-start gap-4 p-4 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/25 rounded-xl transition-all text-left group disabled:opacity-50"
+              >
+                <div className="mt-0.5 p-2 bg-indigo-600/20 rounded-lg">
+                  <GitBranch className="w-5 h-5 text-indigo-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-200 text-sm">Upload as New Version</p>
+                  <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                    Link to the existing manuscript. Previous reports are preserved. A revision comparison will be generated automatically.
+                  </p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleDuplicateChoice("new")}
+                disabled={submitting}
+                className="w-full flex items-start gap-4 p-4 bg-slate-800/50 hover:bg-slate-800 border border-slate-700 rounded-xl transition-all text-left group disabled:opacity-50"
+              >
+                <div className="mt-0.5 p-2 bg-slate-700/50 rounded-lg">
+                  <FilePlus className="w-5 h-5 text-slate-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-200 text-sm">Upload as New Manuscript</p>
+                  <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                    Treat this as a completely separate manuscript — no version linking.
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setDuplicateModal(false)}
+              className="w-full text-xs text-slate-500 hover:text-slate-400 transition-colors pt-2"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

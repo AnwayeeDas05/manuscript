@@ -28,7 +28,7 @@ REQUIRED JSON OUTPUT FORMAT:
     {{
       "id": "<unique string like 'char-001'>",
       "chapter": <chapter number or null>,
-      "severity": "<major|minor|suggestion>",
+      "severity": "<critical|major|moderate|minor|suggestion>",
       "title": "<short title>",
       "description": "<clear description of the issue with evidence from text>",
       "evidence": "<exact quote from the manuscript that demonstrates the issue>",

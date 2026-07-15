@@ -34,6 +34,9 @@ class EditorialReport(Base):
     executive_summary: Mapped[str] = mapped_column(Text, nullable=True)
     major_findings_count: Mapped[int] = mapped_column(String(10), nullable=True)
     minor_findings_count: Mapped[int] = mapped_column(String(10), nullable=True)
+    critical_findings_count: Mapped[int] = mapped_column(String(10), nullable=True)
+    moderate_findings_count: Mapped[int] = mapped_column(String(10), nullable=True)
+    suggestions_count: Mapped[int] = mapped_column(String(10), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )

@@ -43,6 +43,12 @@ class Manuscript(Base):
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
     )
     processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    # Versioning
+    parent_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("manuscripts.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     # Relationships
     owner: Mapped["User"] = relationship("User", back_populates="manuscripts")  # noqa: F821
@@ -58,6 +64,14 @@ class Manuscript(Base):
     editorial_report: Mapped["EditorialReport"] = relationship(  # noqa: F821
         "EditorialReport", back_populates="manuscript", cascade="all, delete-orphan", uselist=False
     )
+    revision_history: Mapped["RevisionHistory"] = relationship(  # noqa: F821
+        "RevisionHistory",
+        back_populates="manuscript",
+        cascade="all, delete-orphan",
+        uselist=False,
+        foreign_keys="[RevisionHistory.manuscript_id]",
+    )
+
 
     def __repr__(self) -> str:
         return f"<Manuscript id={self.id} title={self.title} status={self.status}>"

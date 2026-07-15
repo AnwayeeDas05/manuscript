@@ -22,8 +22,11 @@ class ManuscriptResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     processed_at: Optional[datetime]
+    parent_id: Optional[str] = None
+    version_number: int = 1
 
     model_config = {"from_attributes": True}
+
 
 
 class ManuscriptListResponse(BaseModel):

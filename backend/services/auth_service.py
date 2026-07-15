@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import get_settings
 from repositories.user_repo import UserRepository
 from schemas.auth import TokenResponse
-from utils.security import create_access_token, verify_password
+from utils.security import create_access_token, verify_password_async
 
 settings = get_settings()
 
@@ -48,7 +48,7 @@ class AuthService:
     async def login(self, email: str, password: str) -> TokenResponse:
         """Authenticate user and return JWT token."""
         user = await self.user_repo.get_by_email(email)
-        if not user or not verify_password(password, user.hashed_password):
+        if not user or not await verify_password_async(password, user.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password.",

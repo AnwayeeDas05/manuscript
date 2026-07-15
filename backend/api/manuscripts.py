@@ -1,7 +1,8 @@
 """
-Manuscripts API — upload, list, get, process endpoints.
+Manuscripts API — upload (with version support), list, get, process, versions, revision summary.
 """
-from typing import Annotated
+import json
+from typing import Annotated, Optional
 
 from fastapi import (
     APIRouter,
@@ -20,7 +21,9 @@ from database import get_db
 from models.user import User
 from repositories.document_repos import ParsedDocumentRepository
 from repositories.manuscript_repo import ManuscriptRepository
+from repositories.revision_repo import RevisionHistoryRepository
 from schemas.manuscript import ManuscriptListResponse, ManuscriptResponse
+from schemas.report import RevisionSummaryResponse
 from services.manuscript_service import process_manuscript
 from utils.file_utils import save_upload, validate_upload
 from utils.logger import get_logger
@@ -29,7 +32,7 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/manuscripts", tags=["Manuscripts"])
 
 
-@router.post("/upload", response_model=ManuscriptResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/upload", status_code=status.HTTP_201_CREATED)
 async def upload_manuscript(
     background_tasks: BackgroundTasks,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -38,22 +41,74 @@ async def upload_manuscript(
     title: str = Form(...),
     author: str = Form(None),
     auto_process: bool = Form(True),
+    upload_mode: Optional[str] = Form(None),  # "new" | "version" | None (triggers duplicate check)
 ):
-    """Upload a manuscript PDF or DOCX file."""
+    """
+    Upload a manuscript PDF or DOCX file.
+    
+    If upload_mode is None and a manuscript with the same title exists,
+    returns a 409 response prompting the user to choose a mode.
+    If upload_mode="version", creates a new version of the existing manuscript.
+    If upload_mode="new", creates a brand new root manuscript.
+    """
     file_bytes = await file.read()
 
-    # Validate type and size
     try:
         validate_upload(file, len(file_bytes))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
-    # Persist to disk
+    repo = ManuscriptRepository(db)
+
+    # Duplicate detection when no mode is specified
+    if upload_mode is None:
+        existing = await repo.find_by_title_and_owner(title, current_user.id)
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "status": "duplicate_found",
+                    "message": f"A manuscript titled '{title}' already exists.",
+                    "existing_id": existing.id,
+                    "existing_version": existing.version_number,
+                },
+            )
+
+    # Persist file to disk
     saved_path = save_upload(file_bytes, file.filename or "manuscript")
     file_type = saved_path.suffix.lstrip(".")
 
-    # Save metadata to DB
-    repo = ManuscriptRepository(db)
+    if upload_mode == "version":
+        # Find the root manuscript (parent) to attach this version to
+        parent = await repo.find_by_title_and_owner(title, current_user.id)
+        if not parent:
+            # Fallback: maybe the title changed slightly; treat as new
+            upload_mode = "new"
+        else:
+            next_version = await repo.get_latest_version_number(parent.id, current_user.id) + 1
+            manuscript = await repo.create_version(
+                owner_id=current_user.id,
+                title=title,
+                original_filename=file.filename or saved_path.name,
+                file_path=str(saved_path),
+                file_size_bytes=len(file_bytes),
+                file_type=file_type,
+                parent_id=parent.id,
+                version_number=next_version,
+                author=author,
+            )
+            logger.info(
+                "manuscript_version_uploaded",
+                user_id=current_user.id,
+                manuscript_id=manuscript.id,
+                version=next_version,
+                parent_id=parent.id,
+            )
+            if auto_process:
+                background_tasks.add_task(_run_processing_task, manuscript_id=manuscript.id)
+            return manuscript
+
+    # Default: create new root manuscript
     manuscript = await repo.create(
         owner_id=current_user.id,
         title=title,
@@ -63,21 +118,14 @@ async def upload_manuscript(
         file_type=file_type,
         author=author,
     )
-
     logger.info(
         "manuscript_uploaded",
         user_id=current_user.id,
         manuscript_id=manuscript.id,
         filename=file.filename,
     )
-
-    # Optionally kick off processing immediately
     if auto_process:
-        background_tasks.add_task(
-            _run_processing_task,
-            manuscript_id=manuscript.id,
-        )
-
+        background_tasks.add_task(_run_processing_task, manuscript_id=manuscript.id)
     return manuscript
 
 
@@ -143,6 +191,48 @@ async def trigger_processing(
     return manuscript
 
 
+@router.get("/{manuscript_id}/versions", response_model=ManuscriptListResponse)
+async def get_manuscript_versions(
+    manuscript_id: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Return all versions of a manuscript family (the root + all versions)."""
+    repo = ManuscriptRepository(db)
+    manuscript = await repo.get_by_id_and_owner(manuscript_id, current_user.id)
+    if not manuscript:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Manuscript not found.")
+
+    # Resolve root manuscript id
+    root_id = manuscript.parent_id or manuscript.id
+    versions = await repo.list_versions(root_id, current_user.id)
+    return ManuscriptListResponse(manuscripts=versions, total=len(versions))
+
+
+@router.get("/{manuscript_id}/revision-summary", response_model=RevisionSummaryResponse)
+async def get_revision_summary(
+    manuscript_id: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Return the revision comparison summary for a versioned manuscript."""
+    ms_repo = ManuscriptRepository(db)
+    manuscript = await ms_repo.get_by_id_and_owner(manuscript_id, current_user.id)
+    if not manuscript:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Manuscript not found.")
+
+    revision_repo = RevisionHistoryRepository(db)
+    revision = await revision_repo.get_by_manuscript(manuscript_id)
+    if not revision:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No revision summary available for this manuscript version.",
+        )
+
+    data = json.loads(revision.revision_summary_json)
+    return RevisionSummaryResponse(**data)
+
+
 @router.get("/{manuscript_id}/document")
 async def get_parsed_document(
     manuscript_id: str,
@@ -163,7 +253,6 @@ async def get_parsed_document(
             detail="Document has not been parsed yet.",
         )
 
-    import json
     return {
         "id": doc.id,
         "manuscript_id": doc.manuscript_id,
@@ -186,7 +275,6 @@ async def delete_manuscript(
     if not manuscript:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Manuscript not found.")
 
-    # Remove file from disk
     from utils.file_utils import delete_file
     delete_file(manuscript.file_path)
 
