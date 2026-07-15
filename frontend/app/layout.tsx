@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Manuscript Intel — AI-Powered Editorial Consistency & Review System",
+  title: "InkSpector — AI-Powered Editorial Consistency & Review System",
   description: "Automate the initial editorial review of fiction manuscripts with LangGraph agents and Gemini.",
 };
 

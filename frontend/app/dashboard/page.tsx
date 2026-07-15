@@ -68,24 +68,40 @@ export default function DashboardPage() {
       value: stats?.total_manuscripts || 0,
       icon: BookOpen,
       color: "text-blue-400 bg-blue-500/10 border-blue-500/10",
+      gradient: "from-blue-950/20 to-slate-900/30",
+      accent: "border-l-blue-500",
+      trend: "",
+      trendColor: "",
     },
     {
       name: "Successfully Reviewed",
       value: stats?.completed_manuscripts || 0,
       icon: CheckCircle2,
       color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/10",
+      gradient: "from-emerald-950/20 to-slate-900/30",
+      accent: "border-l-emerald-500",
+      trend: "All completed",
+      trendColor: "text-emerald-400",
     },
     {
       name: "Currently Processing",
       value: stats?.processing_manuscripts || 0,
       icon: Clock,
       color: "text-amber-400 bg-amber-500/10 border-amber-500/10",
+      gradient: "from-amber-950/20 to-slate-900/30",
+      accent: "border-l-amber-500",
+      trend: stats?.processing_manuscripts && stats.processing_manuscripts > 0 ? "In progress" : "Queue empty",
+      trendColor: stats?.processing_manuscripts && stats.processing_manuscripts > 0 ? "text-amber-400" : "text-slate-500",
     },
     {
       name: "Total Editorial Reports",
       value: stats?.total_reports || 0,
       icon: FileText,
       color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/10",
+      gradient: "from-indigo-950/20 to-slate-900/30",
+      accent: "border-l-indigo-500",
+      trend: "",
+      trendColor: "",
     },
   ];
 
@@ -93,7 +109,7 @@ export default function DashboardPage() {
     <DashboardLayout>
       <div className="p-6 md:p-10 space-y-8 max-w-7xl mx-auto w-full">
         {/* Welcome Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-indigo-950/20 via-slate-900/40 to-slate-950/20 border border-slate-800/80 p-8 rounded-2xl relative overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-indigo-950/20 via-slate-900/40 to-slate-950/20 border border-slate-800/80 p-8 rounded-2xl relative overflow-hidden animate-fade-in">
           <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-indigo-600/5 rounded-full blur-[80px] pointer-events-none" />
           <div className="space-y-1.5">
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
@@ -113,18 +129,23 @@ export default function DashboardPage() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 animate-cascade">
           {statCards.map((card) => (
             <div
               key={card.name}
-              className={`p-6 rounded-2xl bg-slate-900/30 border border-slate-800/80 flex items-center justify-between`}
+              className={`p-5 rounded-2xl bg-gradient-to-br ${card.gradient} border border-slate-800/80 border-l-4 ${card.accent} flex items-center justify-between hover-lift`}
             >
-              <div className="space-y-1.5">
-                <span className="text-sm text-slate-500 font-medium">{card.name}</span>
+              <div className="space-y-1.5 min-w-0">
+                <span className="text-xs text-slate-500 font-medium truncate block">{card.name}</span>
                 <p className="text-3xl font-bold text-slate-100">{card.value}</p>
+                {card.trend && (
+                  <span className={`text-[10px] font-semibold block ${card.trendColor}`}>
+                    {card.trend}
+                  </span>
+                )}
               </div>
-              <div className={`p-3 rounded-xl border ${card.color}`}>
-                <card.icon className="w-6 h-6" />
+              <div className={`p-3 rounded-xl border ${card.color} shrink-0 ml-4`}>
+                <card.icon className="w-5 h-5" />
               </div>
             </div>
           ))}
@@ -218,23 +239,25 @@ export default function DashboardPage() {
                   {stats?.recent_reports.map((r) => (
                     <div
                       key={r.id}
-                      className="p-4 bg-slate-900/40 hover:bg-slate-900/60 border border-slate-800/40 rounded-xl flex items-center justify-between"
+                      className="p-4 bg-slate-900/40 hover:bg-slate-900/60 border border-slate-800/40 rounded-xl flex items-center justify-between hover-lift"
                     >
                       <div className="space-y-1 min-w-0">
                         <Link
-                          href={`/reports/${r.id}`}
+                          href={`/manuscripts/${r.manuscript_id}`}
                           className="font-semibold text-sm text-slate-200 hover:text-indigo-400 transition-colors block truncate"
                         >
                           Report for Manuscript
                         </Link>
-                        <p className="text-xs text-slate-500">Score: {r.overall_score || "N/A"}</p>
+                        <p className="text-xs text-slate-500">
+                          Score: {r.overall_score !== undefined ? `${(r.overall_score / 10).toFixed(1)}/10` : "N/A"}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-amber-400 bg-amber-400/5 px-2 py-0.5 rounded border border-amber-400/10">
+                        <span className="text-xs text-rose-400 bg-rose-500/5 px-2 py-0.5 rounded border border-rose-500/10">
                           {r.major_findings_count} Major
                         </span>
                         <Link
-                          href={`/reports/${r.id}`}
+                          href={`/manuscripts/${r.manuscript_id}`}
                           className="p-1.5 text-slate-400 hover:text-slate-200 transition-colors"
                         >
                           <ArrowRight className="w-4 h-4" />

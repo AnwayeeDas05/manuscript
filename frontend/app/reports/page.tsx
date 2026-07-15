@@ -136,24 +136,28 @@ export default function ReportsListPage() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3 animate-cascade">
             {groups.map(({ rootId, title, items }) => {
               const isExpanded = expandedGroups.has(rootId);
               const hasMultiple = items.length > 1;
               const bestScore = Math.max(...items.map((i) => i.report.overall_score ?? 0));
 
+              const getAccentClass = (score: number) => {
+                const s = score / 10;
+                if (s >= 8) return "border-l-emerald-500";
+                if (s >= 6) return "border-l-yellow-500";
+                if (s >= 4) return "border-l-orange-500";
+                return "border-l-red-500";
+              };
+
               return (
-                <div key={rootId} className="border border-slate-800/80 rounded-2xl overflow-hidden bg-slate-900/20">
+                <div key={rootId} className={`border border-slate-800/80 border-l-4 ${getAccentClass(bestScore)} rounded-2xl overflow-hidden bg-gradient-to-br from-slate-900/30 to-slate-950/20 hover-lift`}>
                   {/* Group Header */}
                   <button
                     onClick={() => toggleGroup(rootId)}
-                    className="w-full flex items-center gap-4 p-5 hover:bg-slate-800/30 transition-colors text-left group"
+                    className="w-full flex items-center gap-4 p-5 hover:bg-slate-800/10 transition-colors text-left group"
                   >
-                    {isExpanded ? (
-                      <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
-                    )}
+                    <ChevronRight className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
 
                     <div className="w-8 h-8 rounded-lg bg-indigo-600/10 text-indigo-400 flex items-center justify-center shrink-0">
                       <FileText className="w-4 h-4" />

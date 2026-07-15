@@ -19,7 +19,7 @@ export default function ProfilePage() {
           </p>
         </div>
 
-        <div className="bg-slate-900/30 border border-slate-800/80 rounded-2xl overflow-hidden shadow-xl">
+        <div className="bg-gradient-to-br from-indigo-950/5 to-slate-900/30 border border-slate-800/80 border-l-4 border-l-indigo-500 rounded-2xl overflow-hidden shadow-xl hover-lift animate-fade-in">
           {/* Header Accent */}
           <div className="h-28 bg-gradient-to-r from-indigo-950/40 via-purple-950/20 to-slate-900 relative">
             <div className="absolute -bottom-10 left-8">
@@ -37,7 +37,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4 border-t border-slate-800/80 pt-6">
-              <div className="flex items-center gap-3 p-3 bg-slate-950/40 border border-slate-900 rounded-xl">
+              <div className="flex items-center gap-3 p-3 bg-slate-950/40 border border-slate-900 rounded-xl hover-lift">
                 <Mail className="w-4 h-4 text-slate-500" />
                 <div className="min-w-0">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Email</p>
@@ -45,7 +45,7 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 p-3 bg-slate-950/40 border border-slate-900 rounded-xl">
+              <div className="flex items-center gap-3 p-3 bg-slate-950/40 border border-slate-900 rounded-xl hover-lift">
                 <Calendar className="w-4 h-4 text-slate-500" />
                 <div className="min-w-0">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Member Since</p>
@@ -55,7 +55,7 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 p-3 bg-slate-950/40 border border-slate-900 rounded-xl">
+              <div className="flex items-center gap-3 p-3 bg-slate-950/40 border border-slate-900 rounded-xl hover-lift">
                 <Shield className="w-4 h-4 text-slate-500" />
                 <div className="min-w-0">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Account Status</p>
@@ -65,7 +65,7 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 p-3 bg-slate-950/40 border border-slate-900 rounded-xl">
+              <div className="flex items-center gap-3 p-3 bg-slate-950/40 border border-slate-900 rounded-xl hover-lift">
                 <Key className="w-4 h-4 text-slate-500" />
                 <div className="min-w-0">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Role</p>

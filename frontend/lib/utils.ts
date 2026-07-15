@@ -9,8 +9,27 @@ export function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
+export function safeParseDate(dateStr: string): Date {
+  if (!dateStr) return new Date();
+  
+  // Normalize formatting (replace space with T)
+  let normalized = dateStr.trim().replace(" ", "T");
+  
+  // If it lacks timezone indicator (Z or offset), treat it as UTC
+  if (!normalized.endsWith("Z") && !/[+-]\d{2}:?\d{2}$/.test(normalized)) {
+    normalized += "Z";
+  }
+  
+  const d = new Date(normalized);
+  if (isNaN(d.getTime())) {
+    return new Date(dateStr); // fallback
+  }
+  return d;
+}
+
 export function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-US", {
+  const date = safeParseDate(dateStr);
+  return date.toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -21,7 +40,7 @@ export function formatDate(dateStr: string): string {
 
 export function formatRelativeTime(dateStr: string): string {
   const now = new Date();
-  const date = new Date(dateStr);
+  const date = safeParseDate(dateStr);
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMins / 60);

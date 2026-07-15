@@ -258,11 +258,11 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
   const scoreChangeBadge = revisionSummary ? (
     revisionSummary.score_change > 0 ? (
       <span className="inline-flex items-center gap-1 text-emerald-400 text-sm font-bold">
-        <ArrowUpRight className="w-4 h-4" /> +{revisionSummary.score_change.toFixed(1)} pts
+        <ArrowUpRight className="w-4 h-4" /> +{(revisionSummary.score_change / 10).toFixed(1)} pts
       </span>
     ) : revisionSummary.score_change < 0 ? (
       <span className="inline-flex items-center gap-1 text-rose-400 text-sm font-bold">
-        <ArrowDownRight className="w-4 h-4" /> {revisionSummary.score_change.toFixed(1)} pts
+        <ArrowDownRight className="w-4 h-4" /> {(revisionSummary.score_change / 10).toFixed(1)} pts
       </span>
     ) : (
       <span className="inline-flex items-center gap-1 text-slate-400 text-sm font-bold">
@@ -377,10 +377,10 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
 
             {/* Editorial Report */}
             {manuscript.status === "completed" && parsedReport && (
-              <div className="space-y-8">
+              <div className="space-y-8 animate-fade-in">
                 {/* Score Summary */}
                 <div className="grid md:grid-cols-3 gap-6">
-                  <div className="bg-slate-900/30 border border-slate-800/80 p-6 rounded-2xl flex flex-col justify-center items-center text-center space-y-4">
+                  <div className="bg-slate-900/30 border border-slate-800/80 p-6 rounded-2xl flex flex-col justify-center items-center text-center space-y-4 hover-lift">
                     <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Overall Score</span>
                     <div className="flex items-baseline gap-1">
                       <span className={`text-5xl font-black ${getScoreColor(parsedReport.overall_score / 10)}`}>
@@ -394,19 +394,18 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
                     </div>
                   </div>
 
-                  <div className="md:col-span-2 bg-slate-900/30 border border-slate-800/80 p-6 rounded-2xl space-y-3 flex flex-col justify-between">
+                  <div className="md:col-span-2 bg-slate-900/30 border border-slate-800/80 p-6 rounded-2xl space-y-3 flex flex-col justify-between hover-lift">
                     <div className="space-y-2">
                       <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Executive Summary</span>
                       <p className="text-sm text-slate-300 leading-relaxed">{parsedReport.executive_summary}</p>
                     </div>
-                    {/* 5-Severity Counts */}
+                    {/* 4-Severity Counts */}
                     <div className="flex flex-wrap gap-3 border-t border-slate-800/60 pt-4 text-xs">
                       {[
                         { label: "Critical", count: criticalCount, color: "text-red-400" },
                         { label: "Major", count: majorCount, color: "text-rose-400" },
                         { label: "Moderate", count: moderateCount, color: "text-orange-400" },
                         { label: "Minor", count: minorCount, color: "text-amber-400" },
-                        { label: "Suggestions", count: suggCount, color: "text-slate-400" },
                       ].map(({ label, count, color }) => (
                         <span key={label} className="flex items-center gap-1.5 text-slate-400">
                           <span className={`w-2 h-2 rounded-full ${color.replace("text-", "bg-")}`} />
@@ -418,14 +417,14 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
                 </div>
 
                 {/* Per-Agent Scores */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 animate-cascade">
                   {[
                     { name: "Character", data: parsedReport.character_analysis },
                     { name: "Plot", data: parsedReport.plot_analysis },
                     { name: "Timeline", data: parsedReport.timeline_analysis },
                     { name: "Dialogue", data: parsedReport.dialogue_analysis },
                   ].map((agent) => (
-                    <div key={agent.name} className="bg-slate-900/30 border border-slate-800/80 p-5 rounded-2xl space-y-2">
+                    <div key={agent.name} className="bg-slate-900/30 border border-slate-800/80 p-5 rounded-2xl space-y-2 hover-lift">
                       <span className="text-xs font-medium text-slate-500">{agent.name}</span>
                       <div className="flex items-baseline gap-1">
                         <span className={`text-xl font-bold ${getScoreColor(agent.data.score)}`}>{agent.data.score}</span>

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useAuth } from "../../../components/AuthContext";
 import { useToast } from "../../../components/Toast";
 import { authApi, ApiError } from "../../../lib/api";
-import { Lock, Mail, ArrowRight, Loader2 } from "lucide-react";
+import { Lock, Mail, ArrowRight, Loader2, Search, BookOpen } from "lucide-react";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -46,10 +46,13 @@ export default function LoginPage() {
         {/* Title */}
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white">
-              M
+            <div className="relative w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 shrink-0">
+              <BookOpen className="w-4 h-4 text-white/95" />
+              <div className="absolute -bottom-0.5 -right-0.5 bg-slate-950 rounded-md p-0.5 border border-slate-800">
+                <Search className="w-2.5 h-2.5 text-indigo-400" />
+              </div>
             </div>
-            <span className="font-semibold text-slate-200">Manuscript Intel</span>
+            <span className="font-semibold text-slate-200">InkSpector</span>
           </Link>
           <h2 className="text-2xl font-bold tracking-tight text-slate-100">Welcome Back</h2>
           <p className="text-sm text-slate-400 mt-1.5">Sign in to manage your manuscripts</p>

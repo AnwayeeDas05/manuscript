@@ -124,13 +124,13 @@ export default function UploadPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="max-w-xl mx-auto bg-gradient-to-br from-indigo-950/5 to-slate-900/30 border border-slate-800/80 border-l-4 border-l-indigo-500 rounded-2xl p-6 md:p-8 space-y-6 hover-lift animate-fade-in">
           {/* Drag & Drop Box */}
           <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-300 ${
+            className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-300 hover-lift ${
               dragOver
                 ? "border-indigo-500 bg-indigo-500/5"
                 : file

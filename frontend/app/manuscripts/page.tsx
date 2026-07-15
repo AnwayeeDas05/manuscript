@@ -184,7 +184,7 @@ export default function ManuscriptsPage() {
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3 animate-cascade">
             {groups.map(({ title, versions }) => {
               const groupKey = title.toLowerCase().trim().replace(/\s+/g, " ");
               const isExpanded = expandedGroups.has(groupKey);
@@ -192,18 +192,23 @@ export default function ManuscriptsPage() {
               const latestStatus = versions[versions.length - 1].status;
               const first = versions[0];
 
+              const getAccentClass = (status: string) => {
+                switch (status) {
+                  case "completed": return "border-l-emerald-500";
+                  case "processing": return "border-l-amber-500 animate-pulse-glow";
+                  case "failed": return "border-l-red-500";
+                  default: return "border-l-indigo-500";
+                }
+              };
+
               return (
-                <div key={groupKey} className="border border-slate-800/80 rounded-2xl overflow-hidden bg-slate-900/20">
+                <div key={groupKey} className={`border border-slate-800/80 border-l-4 ${getAccentClass(latestStatus)} rounded-2xl overflow-hidden bg-gradient-to-br from-slate-900/30 to-slate-950/20 hover-lift`}>
                   {/* Group Header — click to expand */}
                   <button
                     onClick={() => toggleGroup(groupKey)}
-                    className="w-full flex items-center gap-4 p-5 hover:bg-slate-800/30 transition-colors text-left group"
+                    className="w-full flex items-center gap-4 p-5 hover:bg-slate-800/10 transition-colors text-left group"
                   >
-                    {isExpanded ? (
-                      <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
-                    )}
+                    <ChevronRight className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
 
                     <BookOpen className="w-5 h-5 text-indigo-400 shrink-0" />
 
