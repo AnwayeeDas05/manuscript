@@ -79,7 +79,10 @@ export default function RegisterPage() {
                 <Search className="w-2.5 h-2.5 text-indigo-400" />
               </div>
             </div>
-            <span className="font-semibold text-slate-200">InkSpector</span>
+            <span className="font-extrabold tracking-wider text-sm">
+              <span className="text-fuchsia-500">INK</span>
+              <span className="text-cyan-400">SPECTOR</span>
+            </span>
           </Link>
           <h2 className="text-2xl font-bold tracking-tight text-slate-100">Create Account</h2>
           <p className="text-sm text-slate-400 mt-1.5">Sign up to get initial editorial reports</p>

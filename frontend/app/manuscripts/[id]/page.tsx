@@ -62,6 +62,7 @@ import {
   XCircle,
   AlertCircle,
   Info,
+  ArrowLeft,
 } from "lucide-react";
 
 export default function ManuscriptDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -274,16 +275,24 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
   return (
     <DashboardLayout>
       <div className="p-6 md:p-10 max-w-7xl mx-auto w-full space-y-8">
-        {/* Breadcrumbs */}
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <Link href="/manuscripts" className="hover:text-slate-350 transition-colors">Manuscripts</Link>
-          <ChevronRight className="w-3 h-3" />
-          <span className="text-slate-400 truncate">{manuscript.title}</span>
-          {manuscript.version_number > 1 && (
-            <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 font-semibold">
-              v{manuscript.version_number}
-            </span>
-          )}
+        {/* Breadcrumbs & Back Buttons */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <Link href="/manuscripts" className="hover:text-slate-350 transition-colors">Manuscripts</Link>
+            <ChevronRight className="w-3 h-3" />
+            <span className="text-slate-400 truncate">{manuscript.title}</span>
+            {manuscript.version_number > 1 && (
+              <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 font-semibold">
+                v{manuscript.version_number}
+              </span>
+            )}
+          </div>
+          <Link
+            href="/reports"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900/50 hover:bg-slate-800/80 border border-slate-800/80 hover:border-slate-700 text-slate-300 rounded-xl text-xs font-semibold hover-lift transition-all self-start sm:self-auto"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 text-indigo-400 animate-pulse" /> Back to Editorial Reports
+          </Link>
         </div>
 
         <div className="grid lg:grid-cols-[1fr_260px] gap-8 items-start">

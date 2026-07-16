@@ -13,8 +13,9 @@ export default function LandingPage() {
               <Search className="w-3 h-3 text-indigo-400" />
             </div>
           </div>
-          <span className="font-semibold text-lg tracking-tight bg-gradient-to-r from-slate-100 via-slate-200 to-slate-400 bg-clip-text text-transparent">
-            InkSpector
+          <span className="font-extrabold tracking-wider text-lg">
+            <span className="text-fuchsia-500">INK</span>
+            <span className="text-cyan-400">SPECTOR</span>
           </span>
         </div>
         <div className="flex items-center gap-4">
@@ -121,7 +122,7 @@ export default function LandingPage() {
 
       {/* ── Footer ────────────────────────────────────────────────── */}
       <footer className="border-t border-slate-900 bg-slate-950 py-10 text-center text-xs text-slate-500 px-6">
-        <p>© {new Date().getFullYear()} InkSpector Platform. All rights reserved.</p>
+        <p>© {new Date().getFullYear()} <span className="text-fuchsia-500 font-bold">INK</span><span className="text-cyan-400 font-bold">SPECTOR</span> Platform. All rights reserved.</p>
         <p className="mt-2 text-slate-600">Built using Next.js, FastAPI, LangGraph, and Google Gemini API.</p>
       </footer>
     </div>

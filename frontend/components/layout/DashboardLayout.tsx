@@ -49,8 +49,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             </div>
             {!collapsed && (
-              <span className="font-semibold bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent truncate">
-                InkSpector
+              <span className="font-extrabold tracking-wider text-sm truncate">
+                <span className="text-fuchsia-500">INK</span>
+                <span className="text-cyan-400">SPECTOR</span>
               </span>
             )}
           </div>
@@ -129,7 +130,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Search className="w-2.5 h-2.5 text-indigo-400" />
             </div>
           </div>
-          <span className="font-semibold text-slate-200">InkSpector</span>
+          <span className="font-extrabold tracking-wider text-sm">
+            <span className="text-fuchsia-500">INK</span>
+            <span className="text-cyan-400">SPECTOR</span>
+          </span>
         </div>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -145,8 +149,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
           <div className="relative flex flex-col w-4/5 max-w-sm bg-slate-900 border-r border-slate-800 h-full p-6 animate-in slide-in-from-left duration-300">
             <div className="flex items-center justify-between mb-8">
-              <span className="font-bold text-lg bg-gradient-to-r from-slate-100 to-indigo-300 bg-clip-text text-transparent">
-                InkSpector
+              <span className="font-extrabold tracking-wider text-lg">
+                <span className="text-fuchsia-500">INK</span>
+                <span className="text-cyan-400">SPECTOR</span>
               </span>
               <button
                 onClick={() => setMobileMenuOpen(false)}
