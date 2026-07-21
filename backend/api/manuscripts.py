@@ -294,6 +294,7 @@ async def download_manuscript_file(
     )
 
 
+@router.delete("/{manuscript_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_manuscript(
     manuscript_id: str,
     current_user: Annotated[User, Depends(get_current_user)],

@@ -12,23 +12,22 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Severity → score deduction map (max score = 100)
-SEVERITY_DEDUCTIONS = {
-    "critical": 25,
-    "major": 15,
-    "moderate": 8,
-    "minor": 3,
-    "suggestion": 1,
-}
-
-
-def compute_score_from_findings(findings: list) -> float:
-    """Compute a 0-100 score by deducting points per severity level."""
-    score = 100.0
-    for f in findings:
-        sev = f.get("severity", "minor").lower()
-        score -= SEVERITY_DEDUCTIONS.get(sev, 3)
-    return round(max(0.0, min(100.0, score)), 1)
+def compute_overall_score(result: dict) -> float:
+    """Compute the overall score as the average of the 4 sub-scores."""
+    scores = []
+    for cat in ["character_analysis", "plot_analysis", "timeline_analysis", "dialogue_analysis"]:
+        if cat in result and isinstance(result[cat], dict):
+            try:
+                scores.append(float(result[cat].get("score", 5.0)))
+            except (ValueError, TypeError):
+                scores.append(5.0)
+                
+    if not scores:
+        return 50.0
+        
+    avg_score = sum(scores) / len(scores)
+    # The subscores are 0-10, but the overall_score needs to be 0-100
+    return round(avg_score * 10.0, 1)
 
 
 def _safe_review_json(review) -> str:
@@ -68,15 +67,8 @@ def chief_editor_node(state: EditorialState) -> EditorialState:
         result.setdefault("recommendations", [])
         result.setdefault("overall_assessment", "")
 
-        # Programmatic score calculation — overrides LLM-supplied score
-        all_findings = (
-            result.get("critical_findings", [])
-            + result.get("major_findings", [])
-            + result.get("moderate_findings", [])
-            + result.get("minor_findings", [])
-            + result.get("suggestions", [])
-        )
-        result["overall_score"] = compute_score_from_findings(all_findings)
+        # Programmatic score calculation — average of subscores
+        result["overall_score"] = compute_overall_score(result)
 
         logger.info(
             "chief_editor_done",
@@ -125,7 +117,11 @@ def _build_fallback_report(state: EditorialState, generated_at: str, error: str)
     minor = _by_severity("minor")
     suggestions = _by_severity("suggestion")
 
-    overall = compute_score_from_findings(all_findings)
+    char_score = float(_safe(char_r, "score", 5.0))
+    plot_score = float(_safe(plot_r, "score", 5.0))
+    time_score = float(_safe(time_r, "score", 5.0))
+    dial_score = float(_safe(dial_r, "score", 5.0))
+    overall = round(((char_score + plot_score + time_score + dial_score) / 4) * 10.0, 1)
 
     return {
         "manuscript_id": state["manuscript_id"],
