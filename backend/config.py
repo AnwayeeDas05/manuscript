@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # Max chars sent to each AI agent (context window guard)
     max_context_chars: int = 80_000
 
+    # ── CORS ─────────────────────────────────────────────────────────────
+    # Comma-separated list of extra allowed origins (e.g. your Vercel URL)
+    cors_allowed_origins: str = ""
+
     @property
     def max_file_size_bytes(self) -> int:
         return self.max_file_size_mb * 1024 * 1024
