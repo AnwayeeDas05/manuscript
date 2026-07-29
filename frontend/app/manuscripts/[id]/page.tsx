@@ -62,6 +62,8 @@ import {
   XCircle,
   AlertCircle,
   Info,
+  ArrowLeft,
+  Pencil,
 } from "lucide-react";
 
 export default function ManuscriptDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -75,6 +77,39 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
   const [parsedReport, setParsedReport] = useState<FullReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [processingState, setProcessingState] = useState<string>("idle");
+
+  // Edit modal
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editAuthor, setEditAuthor] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleOpenEdit = () => {
+    if (!manuscript) return;
+    setEditTitle(manuscript.title);
+    setEditAuthor(manuscript.author || "");
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateMetadata = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !manuscript) return;
+    if (!editTitle.trim()) {
+      toast("Title cannot be empty.", "error");
+      return;
+    }
+    try {
+      setIsUpdating(true);
+      await manuscriptsApi.update(manuscript.id, { title: editTitle, author: editAuthor }, token);
+      toast("Manuscript details updated successfully.", "success");
+      setIsEditModalOpen(false);
+      await loadManuscriptAndReport();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.detail : "Failed to update details.", "error");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   // Version history
   const [versions, setVersions] = useState<Manuscript[]>([]);
@@ -291,8 +326,17 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
           <div className="space-y-8 min-w-0">
             {/* Header Box */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-900/30 border border-slate-800/80 p-6 rounded-2xl">
-              <div className="space-y-2">
-                <h1 className="text-2xl font-bold text-slate-100">{manuscript.title}</h1>
+              <div className="space-y-2 flex-1 min-w-0">
+                <div className="flex items-center gap-3">
+                  <h1 className="text-2xl font-bold text-slate-100 truncate">{manuscript.title}</h1>
+                  <button
+                    onClick={handleOpenEdit}
+                    className="p-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-850 text-slate-400 hover:text-slate-200 border border-slate-700/50 hover:border-slate-600 transition-colors flex-shrink-0"
+                    title="Edit Title/Author"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400">
                   <span className="flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5 text-slate-500" />
@@ -554,7 +598,6 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
                         <option value="major">Major</option>
                         <option value="moderate">Moderate</option>
                         <option value="minor">Minor</option>
-                        <option value="suggestion">Suggestion</option>
                       </select>
                     </div>
                   </div>
@@ -647,6 +690,57 @@ export default function ManuscriptDetailPage({ params }: { params: Promise<{ id:
           )}
         </div>
       </div>
+
+      {/* Edit Modal */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-2xl animate-fade-in">
+            <h3 className="text-lg font-bold text-slate-100">Edit Details</h3>
+            <p className="text-xs text-slate-500">
+              Updating these details will apply to all versions of this manuscript.
+            </p>
+            <form onSubmit={handleUpdateMetadata} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-400">Manuscript Title</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-200 outline-none transition-all"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-400">Author Name</label>
+                <input
+                  type="text"
+                  value={editAuthor}
+                  onChange={(e) => setEditAuthor(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-200 outline-none transition-all"
+                  placeholder="Unknown Author"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  disabled={isUpdating}
+                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white rounded-xl transition-all shadow-md shadow-indigo-600/10 flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isUpdating ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

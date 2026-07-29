@@ -22,6 +22,7 @@ import {
   ChevronRight,
   GitBranch,
   Download,
+  Pencil,
 } from "lucide-react";
 
 export default function ManuscriptsPage() {
@@ -32,6 +33,42 @@ export default function ManuscriptsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  // Inline delete confirmation — store the id of the manuscript pending deletion
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Edit modal
+  const [selectedManuscriptForEdit, setSelectedManuscriptForEdit] = useState<Manuscript | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editAuthor, setEditAuthor] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleOpenEdit = (m: Manuscript) => {
+    setSelectedManuscriptForEdit(m);
+    setEditTitle(m.title);
+    setEditAuthor(m.author || "");
+  };
+
+  const handleUpdateMetadata = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !selectedManuscriptForEdit) return;
+    if (!editTitle.trim()) {
+      toast("Title cannot be empty.", "error");
+      return;
+    }
+    try {
+      setIsUpdating(true);
+      await manuscriptsApi.update(selectedManuscriptForEdit.id, { title: editTitle, author: editAuthor }, token);
+      toast("Manuscript details updated successfully.", "success");
+      setSelectedManuscriptForEdit(null);
+      await loadManuscripts();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.detail : "Failed to update details.", "error");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const loadManuscripts = async () => {
     if (!token) return;
@@ -49,16 +86,29 @@ export default function ManuscriptsPage() {
     if (token) loadManuscripts();
   }, [token]);
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("Delete this manuscript and all its outputs?")) return;
+  const handleDeleteRequest = (id: string) => {
+    // First click: arm the delete (show inline confirm)
+    setPendingDeleteId(id);
+  };
+
+  const handleDeleteConfirm = async (id: string) => {
     if (!token) return;
     try {
+      setIsDeleting(true);
       await manuscriptsApi.delete(id, token);
       toast("Manuscript deleted successfully", "success");
-      setManuscripts((prev) => prev.filter((m) => m.id !== id));
+      setPendingDeleteId(null);
+      // Reload from server for accurate state
+      await loadManuscripts();
     } catch (err) {
       toast(err instanceof ApiError ? err.detail : "Failed to delete manuscript.", "error");
+    } finally {
+      setIsDeleting(false);
     }
+  };
+
+  const handleDeleteCancel = () => {
+    setPendingDeleteId(null);
   };
 
   const handleProcess = async (id: string) => {
@@ -204,18 +254,38 @@ export default function ManuscriptsPage() {
               return (
                 <div key={groupKey} className={`border border-slate-800/80 border-l-4 ${getAccentClass(latestStatus)} rounded-2xl overflow-hidden bg-gradient-to-br from-slate-900/30 to-slate-950/20 hover-lift`}>
                   {/* Group Header — click to expand */}
-                  <button
+                  <div
                     onClick={() => toggleGroup(groupKey)}
-                    className="w-full flex items-center gap-4 p-5 hover:bg-slate-800/10 transition-colors text-left group"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleGroup(groupKey);
+                      }
+                    }}
+                    className="w-full flex items-center gap-4 p-5 hover:bg-slate-800/10 transition-colors text-left group cursor-pointer outline-none"
                   >
                     <ChevronRight className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
 
                     <BookOpen className="w-5 h-5 text-indigo-400 shrink-0" />
 
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-slate-100 group-hover:text-indigo-300 transition-colors truncate">
-                        {title}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-slate-100 group-hover:text-indigo-300 transition-colors truncate">
+                          {title}
+                        </p>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEdit(first);
+                          }}
+                          className="p-1 rounded-lg bg-slate-800/40 hover:bg-slate-800 text-slate-450 hover:text-slate-200 border border-slate-800 hover:border-slate-700 transition-colors shrink-0"
+                          title="Edit Title/Author"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      </div>
                       <p className="text-xs text-slate-500 mt-0.5">
                         By {first.author || "Unknown"} · {formatDate(first.created_at).split(",")[0]}
                       </p>
@@ -234,7 +304,7 @@ export default function ManuscriptsPage() {
                         {latestStatus}
                       </span>
                     </div>
-                  </button>
+                  </div>
 
                   {/* Versions — shown when expanded */}
                   {isExpanded && (
@@ -308,13 +378,36 @@ export default function ManuscriptsPage() {
                               <Download className="w-3.5 h-3.5" />
                             </button>
 
-                            <button
-                              onClick={() => handleDelete(m.id)}
-                              className="p-1.5 hover:bg-rose-500/10 text-slate-600 hover:text-rose-400 rounded-lg border border-transparent hover:border-rose-500/10 transition-all"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {pendingDeleteId === m.id ? (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => handleDeleteConfirm(m.id)}
+                                  disabled={isDeleting}
+                                  className="flex items-center gap-1 py-1 px-2.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-60 text-white rounded-lg text-[10px] font-semibold transition-all"
+                                >
+                                  {isDeleting ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="w-3 h-3" />
+                                  )}
+                                  Confirm
+                                </button>
+                                <button
+                                  onClick={handleDeleteCancel}
+                                  className="py-1 px-2.5 text-slate-400 hover:text-slate-200 rounded-lg text-[10px] font-semibold transition-all border border-slate-700 hover:border-slate-500"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleDeleteRequest(m.id)}
+                                className="p-1.5 hover:bg-rose-500/15 text-slate-400 hover:text-rose-400 rounded-lg border border-transparent hover:border-rose-500/20 transition-all"
+                                title="Delete manuscript"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -326,6 +419,57 @@ export default function ManuscriptsPage() {
           </div>
         )}
       </div>
+
+      {/* Edit Modal */}
+      {selectedManuscriptForEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-2xl animate-fade-in">
+            <h3 className="text-lg font-bold text-slate-100">Edit Details</h3>
+            <p className="text-xs text-slate-500">
+              Updating these details will apply to all versions of this manuscript.
+            </p>
+            <form onSubmit={handleUpdateMetadata} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-400">Manuscript Title</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-200 outline-none transition-all"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-400">Author Name</label>
+                <input
+                  type="text"
+                  value={editAuthor}
+                  onChange={(e) => setEditAuthor(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-200 outline-none transition-all"
+                  placeholder="Unknown Author"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedManuscriptForEdit(null)}
+                  disabled={isUpdating}
+                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white rounded-xl transition-all shadow-md shadow-indigo-600/10 flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isUpdating ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

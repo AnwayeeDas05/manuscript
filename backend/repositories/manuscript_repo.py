@@ -107,6 +107,34 @@ class ManuscriptRepository:
         await self.db.delete(manuscript)
         await self.db.flush()
 
+    async def update_metadata(
+        self,
+        manuscript: Manuscript,
+        title: Optional[str] = None,
+        author: Optional[str] = None,
+    ) -> Manuscript:
+        """Update manuscript title and/or author.
+        If this manuscript is part of a version family, update all members in the family.
+        """
+        family_id = manuscript.parent_id or manuscript.id
+        result = await self.db.execute(
+            select(Manuscript).where(
+                ((Manuscript.id == family_id) | (Manuscript.parent_id == family_id)),
+                Manuscript.owner_id == manuscript.owner_id
+            )
+        )
+        family_members = result.scalars().all()
+
+        for member in family_members:
+            if title is not None:
+                member.title = title
+            if author is not None:
+                member.author = author
+
+        await self.db.flush()
+        await self.db.refresh(manuscript)
+        return manuscript
+
     async def find_by_title_and_owner(
         self, title: str, owner_id: str
     ) -> Optional[Manuscript]:

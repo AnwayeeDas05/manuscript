@@ -25,7 +25,7 @@ from models.user import User
 from repositories.document_repos import ParsedDocumentRepository
 from repositories.manuscript_repo import ManuscriptRepository
 from repositories.revision_repo import RevisionHistoryRepository
-from schemas.manuscript import ManuscriptListResponse, ManuscriptResponse
+from schemas.manuscript import ManuscriptListResponse, ManuscriptResponse, ManuscriptUpdateRequest
 from schemas.report import RevisionSummaryResponse
 from services.manuscript_service import process_manuscript
 from utils.file_utils import save_upload, validate_upload
@@ -311,3 +311,22 @@ async def delete_manuscript(
 
     await repo.delete(manuscript)
     logger.info("manuscript_deleted", manuscript_id=manuscript_id, user_id=current_user.id)
+
+
+@router.patch("/{manuscript_id}", response_model=ManuscriptResponse)
+async def update_manuscript(
+    manuscript_id: str,
+    req: ManuscriptUpdateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Update manuscript metadata (title, author)."""
+    repo = ManuscriptRepository(db)
+    manuscript = await repo.get_by_id_and_owner(manuscript_id, current_user.id)
+    if not manuscript:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Manuscript not found.")
+
+    updated = await repo.update_metadata(manuscript, title=req.title, author=req.author)
+    await db.commit()
+    logger.info("manuscript_updated", manuscript_id=manuscript_id, user_id=current_user.id)
+    return updated

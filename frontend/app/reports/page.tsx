@@ -218,12 +218,17 @@ export default function ReportsListPage() {
                                   {report.critical_findings_count} Critical
                                 </span>
                               )}
-                              {report.major_findings_count && (
+                              {report.major_findings_count && Number(report.major_findings_count) > 0 && (
                                 <span className="text-rose-400 bg-rose-500/5 px-1.5 py-0.5 rounded border border-rose-500/10">
                                   {report.major_findings_count} Major
                                 </span>
                               )}
-                              {report.minor_findings_count && (
+                              {report.moderate_findings_count && Number(report.moderate_findings_count) > 0 && (
+                                <span className="text-orange-400 bg-orange-500/5 px-1.5 py-0.5 rounded border border-orange-500/10">
+                                  {report.moderate_findings_count} Moderate
+                                </span>
+                              )}
+                              {report.minor_findings_count && Number(report.minor_findings_count) > 0 && (
                                 <span className="text-amber-400 bg-amber-500/5 px-1.5 py-0.5 rounded border border-amber-400/10">
                                   {report.minor_findings_count} Minor
                                 </span>

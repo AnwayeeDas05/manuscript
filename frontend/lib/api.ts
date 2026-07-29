@@ -95,6 +95,13 @@ export const manuscriptsApi = {
   delete: (id: string, token: string) =>
     request<null>(`/manuscripts/${id}`, { method: "DELETE" }, token),
 
+  update: (id: string, data: { title?: string; author?: string }, token: string) =>
+    request<Manuscript>(`/manuscripts/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }, token),
+
   getVersions: (id: string, token: string) =>
     request<ManuscriptListResponse>(`/manuscripts/${id}/versions`, {}, token),
 

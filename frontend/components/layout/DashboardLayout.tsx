@@ -38,7 +38,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row">
       {/* ── Desktop Sidebar ────────────────────────────────────────── */}
-      <aside className={`hidden md:flex flex-col border-r border-slate-800 bg-slate-900/50 backdrop-blur-md shrink-0 transition-all duration-300 ${collapsed ? "w-20" : "w-64"}`}>
+      <aside className={`hidden md:flex flex-col h-screen sticky top-0 border-r border-slate-800 bg-slate-900/50 backdrop-blur-md shrink-0 transition-all duration-300 ${collapsed ? "w-20" : "w-64"}`}>
         {/* Brand / Logo */}
         <div className="h-16 flex items-center justify-between px-5 border-b border-slate-800">
           <div className="flex items-center gap-3 overflow-hidden">
